@@ -58,6 +58,9 @@ struct TaskEditorSheet: View {
     // 链接参数
     @State private var urlString: String = "https://"
     
+    // 自然语言时间识别结果
+    @State private var parsedTimeResult: ParsedTimeResult? = nil
+    
     // 试听状态：直接响应音频服务实际播放状态
     private var isPreviewing: Bool {
         audioService.isPlaying
@@ -79,7 +82,14 @@ struct TaskEditorSheet: View {
         Group {
             if inlineDate != nil {
                 VStack(alignment: .leading, spacing: 9) {
-                    TextField("任务名称（选填）", text: $name).textFieldStyle(.roundedBorder)
+                    TextField("任务名称（选填）", text: $name)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: name) { val in
+                            handleNaturalLanguageInput(val)
+                        }
+                    if let parsed = parsedTimeResult {
+                        naturalLanguageHintBar(parsed: parsed)
+                    }
                     actionSection
                     HStack {
                         Spacer()
@@ -219,28 +229,50 @@ struct TaskEditorSheet: View {
                 // 2. 中间自适应内容区
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
-                        // 任务名称精致输入条
-                        HStack(spacing: 8) {
+                        // 任务名称精致输入条（支持多行展开与右侧安全避让，杜绝遮挡文字）
+                        HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "pencil.line")
                                 .font(.system(size: 13))
                                 .foregroundColor(name.isEmpty ? .secondary : .accentColor)
+                                .padding(.top, 1.5)
                             
-                            TextField("任务名称（留空自动命名为「\(previewDefaultName)」）", text: $name)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 13))
-                            
-                            if !name.isEmpty {
-                                Button(action: { name = "" }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.secondary.opacity(0.8))
-                                        .font(.system(size: 12))
+                            ZStack(alignment: .topTrailing) {
+                                TextField("任务名称（留空自动命名为「\(previewDefaultName)」）", text: $name, axis: .vertical)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 13))
+                                    .lineLimit(1...5)
+                                    .padding(.trailing, name.isEmpty ? 0 : 20)
+                                    .onChange(of: name) { val in
+                                        let sanitized = val.replacingOccurrences(of: "\r\n", with: " ").replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
+                                        if sanitized != val {
+                                            name = sanitized
+                                            return
+                                        }
+                                        handleNaturalLanguageInput(sanitized)
+                                    }
+                                
+                                if !name.isEmpty {
+                                    Button(action: {
+                                        name = ""
+                                        parsedTimeResult = nil
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.secondary.opacity(0.8))
+                                            .font(.system(size: 12))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.top, 1)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .glassPanel(cornerRadius: 8)
+                        
+                        // 自然语言识别反馈胶囊
+                        if let parsed = parsedTimeResult {
+                            naturalLanguageHintBar(parsed: parsed)
+                        }
                         
                         // 触发方式与时间选择
                         timePickerSection
@@ -349,9 +381,9 @@ struct TaskEditorSheet: View {
             
             Picker("", selection: $triggerMode) {
                 if case .once = editingTask?.trigger { Text("一次提醒").tag(3) }
-                Text("倒计时").tag(0)
-                Text("每日定时").tag(1)
+                Text("每天定时").tag(1)
                 Text("循环间隔").tag(2)
+                Text("倒计时").tag(0)
             }
             .pickerStyle(.segmented)
             
@@ -401,11 +433,11 @@ struct TaskEditorSheet: View {
         VStack(spacing: 14) {
             // 常用预设快捷胶囊
             HStack(spacing: 8) {
-                ForEach([(5, "5m 快速"), (15, "15m"), (25, "25m 常用"), (45, "45m"), (60, "1h")], id: \.0) { mins, label in
-                    let isSelected = countdownMinutes == mins && countdownSeconds == 0
+                ForEach([(0, 30, "30s 极速"), (25, 0, "25m 专注"), (60, 0, "60m 深度")], id: \.2) { mins, secs, label in
+                    let isSelected = countdownMinutes == mins && countdownSeconds == secs
                     presetPill(label: label, isSelected: isSelected) {
                         countdownMinutes = mins
-                        countdownSeconds = 0
+                        countdownSeconds = secs
                     }
                 }
             }
@@ -501,7 +533,7 @@ struct TaskEditorSheet: View {
         VStack(spacing: 14) {
             // 常用时刻预设胶囊 (单行均分平铺)
             HStack(spacing: 8) {
-                ForEach([(9, 0, "09:00 开工"), (12, 0, "12:00 午餐"), (14, 0, "14:00 提神"), (18, 0, "18:00 下班")], id: \.2) { h, m, label in
+                ForEach([(9, 0, "09:00 开工"), (14, 0, "14:00 提神"), (18, 0, "18:00 下班")], id: \.2) { h, m, label in
                     let isSelected = dailyHour == h && dailyMinute == m
                     presetPill(label: label, isSelected: isSelected) {
                         setDaily(hour: h, minute: m)
@@ -530,15 +562,12 @@ struct TaskEditorSheet: View {
     // 3. 循环间隔交互选择器 (支持分秒双调控)
     private var intervalInteractivePicker: some View {
         VStack(spacing: 14) {
-            // 常用快捷胶囊 (覆盖秒级快闪与常用分钟)
-            HStack(spacing: 6) {
+            // 常用快捷胶囊 (覆盖常用间隔)
+            HStack(spacing: 8) {
                 ForEach([
-                    (0, 30, "30s"),
-                    (1, 0, "1m 快速"),
-                    (5, 0, "5m 间隙"),
-                    (15, 0, "15m 护眼"),
-                    (30, 0, "30m 喝水"),
-                    (60, 0, "1h 休息")
+                    (0, 30, "30s 极速"),
+                    (25, 0, "25m 专注"),
+                    (60, 0, "60m 深度")
                 ], id: \.2) { m, s, label in
                     let isSelected = intervalMinutes == m && intervalSeconds == s
                     presetPill(label: label, isSelected: isSelected) {
@@ -897,6 +926,7 @@ struct TaskEditorSheet: View {
     }
     
     private func populateData() {
+        parsedTimeResult = nil
         guard let task = editingTask else {
             name = ""
             actionTypeIndex = 0
@@ -955,20 +985,36 @@ struct TaskEditorSheet: View {
         stopPreview()
         
         guard !isSaveDisabled else { return }
+        
+        // 自然语言优先解析兜底
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let activeParsed = NaturalLanguageTimeParser.shared.parse(trimmedName) ?? parsedTimeResult
+        
         var trigger: TriggerType
-        switch triggerMode {
-        case 0:
-            let total = max(1, countdownMinutes * 60 + countdownSeconds)
-            trigger = .countdown(totalSeconds: total)
-        case 1:
-            trigger = .daily(hour: dailyHour, minute: dailyMinute)
-        case 2:
-            let total = max(5, intervalMinutes * 60 + intervalSeconds)
-            trigger = .interval(intervalSeconds: total)
-        case 3:
-            trigger = .once(onceDate)
-        default:
-            trigger = .countdown(totalSeconds: 15 * 60)
+        if let parsed = activeParsed {
+            switch parsed.mode {
+            case .countdown(let m, let s):
+                trigger = .countdown(totalSeconds: max(1, m * 60 + s))
+            case .daily(let h, let m):
+                trigger = .daily(hour: h, minute: m)
+            case .interval(let m, let s):
+                trigger = .interval(intervalSeconds: max(5, m * 60 + s))
+            }
+        } else {
+            switch triggerMode {
+            case 0:
+                let total = max(1, countdownMinutes * 60 + countdownSeconds)
+                trigger = .countdown(totalSeconds: total)
+            case 1:
+                trigger = .daily(hour: dailyHour, minute: dailyMinute)
+            case 2:
+                let total = max(5, intervalMinutes * 60 + intervalSeconds)
+                trigger = .interval(intervalSeconds: total)
+            case 3:
+                trigger = .once(onceDate)
+            default:
+                trigger = .countdown(totalSeconds: 15 * 60)
+            }
         }
         
         if let inlineDate { trigger = .once(inlineDate) }
@@ -989,7 +1035,14 @@ struct TaskEditorSheet: View {
             action = .none
         }
         
-        let finalName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? previewDefaultName : name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName: String
+        if let parsed = activeParsed, !parsed.cleanedTitle.isEmpty {
+            finalName = parsed.cleanedTitle
+        } else if !trimmedName.isEmpty && activeParsed == nil {
+            finalName = trimmedName
+        } else {
+            finalName = previewDefaultName
+        }
         
         var task = editingTask ?? ScheduleTask(
             name: finalName,
@@ -1015,5 +1068,57 @@ struct TaskEditorSheet: View {
         }
         
         if inlineDate == nil { dismiss() }
+    }
+    
+    // MARK: - 自然语言输入实时处理与提示
+    private func handleNaturalLanguageInput(_ text: String) {
+        if let result = NaturalLanguageTimeParser.shared.parse(text) {
+            parsedTimeResult = result
+            switch result.mode {
+            case .countdown(let m, let s):
+                triggerMode = 0
+                countdownMinutes = m
+                countdownSeconds = s
+            case .daily(let h, let m):
+                triggerMode = 1
+                setDaily(hour: h, minute: m)
+            case .interval(let m, let s):
+                triggerMode = 2
+                intervalMinutes = m
+                intervalSeconds = s
+            }
+        } else {
+            parsedTimeResult = nil
+        }
+    }
+    
+    @ViewBuilder
+    private func naturalLanguageHintBar(parsed: ParsedTimeResult) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.accentColor)
+            Text("自动识别：")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+            Text(parsed.summaryText)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.accentColor)
+            if !parsed.cleanedTitle.isEmpty {
+                Text("· 任务名「\(parsed.cleanedTitle)」")
+                    .font(.system(size: 10.5))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4.5)
+        .background(Color.accentColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.2), lineWidth: 0.8)
+        )
     }
 }

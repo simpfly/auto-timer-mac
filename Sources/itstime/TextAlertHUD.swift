@@ -8,13 +8,15 @@ public final class TextAlertHUD: ObservableObject {
     private var alertWindow: NSPanel?
     @Published public var currentTitle: String = ""
     @Published public var currentMessage: String = ""
+    @Published public var currentColor: Color = .accentColor
     
     public init() {}
     
-    /// 展示纯文本提醒弹窗卡片（在状态栏图标正下方弹出，必须等待用户确认才关闭）
-    public func show(title: String, message: String) {
+    /// 展示纯文本提醒弹窗卡片（在状态栏图标正下方微弹弹出，必须等待用户确认才关闭）
+    public func show(title: String, message: String, color: Color = .accentColor) {
         self.currentTitle = title.isEmpty ? "定时提醒" : title
         self.currentMessage = message.isEmpty ? "时间已到" : message
+        self.currentColor = color
         
         if alertWindow == nil {
             createAlertWindow()
@@ -22,41 +24,66 @@ public final class TextAlertHUD: ObservableObject {
         
         guard let window = alertWindow else { return }
         
-        // 计算定位：优先放置在状态栏图标正下方，若不可用则定位于屏幕右上角
-        updateWindowPosition(window: window)
+        // 确保 hostingController 立即同步最新状态以获取精准尺寸，杜绝布局滞后造成的二次跳动
+        if let hosting = window.contentViewController as? NSHostingController<TextAlertBubbleView> {
+            hosting.rootView = TextAlertBubbleView()
+        }
+        
+        let targetFrame = calculateTargetFrame(window: window)
         
         if !window.isVisible {
+            // 平滑入场起始位置：微向上偏移 4pt，透明度为 0（无过冲、零回弹弹跳）
+            let initialFrame = NSRect(
+                x: targetFrame.origin.x,
+                y: targetFrame.origin.y + 4,
+                width: targetFrame.width,
+                height: targetFrame.height
+            )
+            
+            window.setFrame(initialFrame, display: false)
             window.alphaValue = 0.0
             window.orderFrontRegardless()
+            
+            // 单阶段平滑微滑入与淡入（0.16s，纯净确定性动效）
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.2
+                context.duration = 0.16
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 window.animator().alphaValue = 1.0
+                window.animator().setFrame(targetFrame, display: true)
             }
         } else {
-            window.alphaValue = 1.0
+            // 已展示状态下若有内容更新，平滑过渡尺寸和位置
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                window.animator().setFrame(targetFrame, display: true)
+                window.animator().alphaValue = 1.0
+            }
             window.orderFrontRegardless()
         }
         
-        // 关键要求：绝不自动淡出！完全等待用户点击【我知道了/确认】或右上角【✕】才关闭！
+        // 关键要求：绝不自动淡出！完全等待用户点击【我知道了/确认】才关闭！
     }
     
-    private func updateWindowPosition(window: NSPanel) {
-        guard let hosting = window.contentViewController as? NSHostingController<TextAlertBubbleView> else { return }
+    private func calculateTargetFrame(window: NSPanel) -> NSRect {
+        guard let hosting = window.contentViewController as? NSHostingController<TextAlertBubbleView> else {
+            return NSRect(x: 0, y: 0, width: 290, height: 120)
+        }
         
         // 强制重新计算并设定 SwiftUI 真实所需尺寸，杜绝高度测量滞后导致的向上偏移截断
         hosting.view.layoutSubtreeIfNeeded()
-        let fittingSize = hosting.sizeThatFits(in: CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude))
-        let cardWidth: CGFloat = 300
-        let cardHeight: CGFloat = max(115, fittingSize.height)
+        let fittingSize = hosting.sizeThatFits(in: CGSize(width: 290, height: CGFloat.greatestFiniteMagnitude))
+        let cardWidth: CGFloat = 290
+        let cardHeight: CGFloat = max(110, fittingSize.height)
         
         let screen = StatusItemManager.shared.button?.window?.screen ?? NSScreen.main ?? NSScreen.screens[0]
         let screenRect = screen.visibleFrame
         
         // 状态栏下沿在屏幕坐标系中的 Y 坐标为 screenRect.maxY
-        // 窗口顶部距离菜单栏底沿留出 10pt 空隙
+        // 窗口顶部距离菜单栏底沿留出 10pt 呼吸间距
         let targetY = screenRect.maxY - cardHeight - 10
         
-        // 水平居中于状态栏按钮
+        // 水平精准居中于状态栏按钮
         var targetX: CGFloat
         if let statusButton = StatusItemManager.shared.button,
            let btnWindow = statusButton.window {
@@ -64,23 +91,32 @@ public final class TextAlertHUD: ObservableObject {
             let buttonRectOnScreen = btnWindow.convertToScreen(buttonRectInWindow)
             targetX = buttonRectOnScreen.midX - cardWidth / 2
         } else {
-            targetX = screenRect.maxX - cardWidth - 20
+            targetX = screenRect.maxX - cardWidth - 16
         }
         
         // 边界安全约束：防止超出屏幕左、右、顶
         targetX = max(screenRect.minX + 16, min(targetX, screenRect.maxX - cardWidth - 16))
         let finalY = min(targetY, screenRect.maxY - cardHeight - 8)
         
-        window.setFrame(NSRect(x: targetX, y: finalY, width: cardWidth, height: cardHeight), display: true)
+        return NSRect(x: targetX, y: finalY, width: cardWidth, height: cardHeight)
     }
     
-    /// 用户点击确认或关闭
+    /// 用户点击确认或关闭（轻微上收淡出）
     public func dismiss() {
         guard let window = alertWindow, window.isVisible else { return }
         
+        let exitFrame = NSRect(
+            x: window.frame.origin.x,
+            y: window.frame.origin.y + 4,
+            width: window.frame.width,
+            height: window.frame.height
+        )
+        
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.2
+            context.duration = 0.16
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             window.animator().alphaValue = 0.0
+            window.animator().setFrame(exitFrame, display: true)
         }, completionHandler: {
             window.orderOut(nil)
         })
@@ -90,7 +126,7 @@ public final class TextAlertHUD: ObservableObject {
         let hosting = NSHostingController(rootView: TextAlertBubbleView())
         
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 130),
+            contentRect: NSRect(x: 0, y: 0, width: 290, height: 120),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -112,49 +148,38 @@ struct TextAlertBubbleView: View {
     @ObservedObject var hud = TextAlertHUD.shared
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // 顶栏：铃铛图标 + 标签 + 关闭小按钮
-            HStack(spacing: 6) {
-                Image(systemName: "bell.badge.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.accentColor)
-                
-                Text("定时提醒")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
-                
+        VStack(spacing: 10) {
+            // 顶排靠左：与主程序一致的品牌图标 + It's Time（尺寸锁定防止重排加宽）
+            HStack {
+                BrandTitleView()
+                    .fixedSize()
                 Spacer()
-                
-                Button(action: {
-                    hud.dismiss()
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.secondary.opacity(0.6))
-                        .frame(width: 18, height: 18)
-                        .background(Color.primary.opacity(0.06))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .help("关闭提醒")
             }
             
-            // 任务名称
-            Text(hud.currentTitle)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-            
-            // 提醒文本内容
-            if !hud.currentMessage.isEmpty && hud.currentMessage != hud.currentTitle {
-                Text(hud.currentMessage)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(.secondary)
+            // 第二排：事项居中放置，放大字号并使用事件类型的专属颜色（标准系统字体，长文本自适应字号与换行）
+            VStack(spacing: 4) {
+                Text(hud.currentTitle)
+                    .font(.system(size: hud.currentTitle.count > 25 ? 14 : (hud.currentTitle.count > 14 ? 16 : 18), weight: .regular))
+                    .foregroundColor(hud.currentColor)
+                    .multilineTextAlignment(.center)
                     .lineLimit(3)
+                    .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
+                
+                // 若有不同的附加详情内容，在下方轻量展示
+                if !hud.currentMessage.isEmpty && hud.currentMessage != hud.currentTitle && hud.currentMessage != "时间已到" {
+                    Text(hud.currentMessage)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 2)
             
-            // 底部操作区：醒目的【确认 / 我知道了】按钮
+            // 底部操作区：醒目的【我知道了】按钮居中放置
             HStack {
                 Spacer()
                 Button(action: {
@@ -163,21 +188,22 @@ struct TextAlertBubbleView: View {
                     Text("我知道了")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 5)
-                        .background(Color.accentColor)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 6)
+                        .background(hud.currentColor)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
+                Spacer()
             }
         }
         .padding(14)
-        .frame(width: 300)
+        .frame(width: 290)
         .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.15), lineWidth: 1)
         )
     }

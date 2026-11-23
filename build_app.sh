@@ -26,6 +26,13 @@ mkdir -p "${RESOURCES_DIR}"
 cp "${BIN_PATH}" "${MACOS_DIR}/${BIN_NAME}"
 chmod +x "${MACOS_DIR}/${BIN_NAME}"
 
+# SwiftPM resource bundle used by Bundle.module
+BIN_DIR="$(dirname "$BIN_PATH")"
+for resource_bundle in "$BIN_DIR"/*.bundle; do
+    [ -d "$resource_bundle" ] || continue
+    cp -R "$resource_bundle" "$RESOURCES_DIR/"
+done
+
 # 拷贝高清图标与内置资源
 if [ -f "AppIcon.icns" ]; then
     cp "AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"

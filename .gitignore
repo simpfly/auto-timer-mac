@@ -24,3 +24,6 @@ AutoTimer.app
 # Logs
 logs/
 *.log
+
+# Temp generated images
+generated_images/

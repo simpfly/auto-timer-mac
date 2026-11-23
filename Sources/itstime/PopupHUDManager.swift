@@ -42,29 +42,42 @@ public final class PopupHUDManager: ObservableObject {
         
         guard let window = hudWindow else { return }
         
-        // 居中屏幕展开
-        if let screen = NSScreen.main {
-            let screenRect = screen.visibleFrame
-            let x = screenRect.midX - window.frame.width / 2
-            let y = screenRect.midY - window.frame.height / 2 + 50
-            window.setFrameOrigin(NSPoint(x: x, y: y))
-        }
+        // 居中屏幕偏上展开，纯净平滑淡入（零过冲、零回弹弹跳）
+        let screen = NSScreen.main ?? NSScreen.screens[0]
+        let screenRect = screen.visibleFrame
+        let targetX = screenRect.midX - window.frame.width / 2
+        let targetY = screenRect.midY - window.frame.height / 2 + 50
+        let targetFrame = NSRect(x: targetX, y: targetY, width: window.frame.width, height: window.frame.height)
         
+        let initialFrame = NSRect(x: targetX, y: targetY + 4, width: window.frame.width, height: window.frame.height)
+        
+        window.setFrame(initialFrame, display: false)
         window.alphaValue = 0.0
         window.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
         
+        // 单阶段平滑微滑入与淡入 (0.16s，纯净确定性动效)
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
+            context.duration = 0.16
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             window.animator().alphaValue = 1.0
+            window.animator().setFrame(targetFrame, display: true)
         }
     }
     
     public func close() {
         guard let window = hudWindow else { return }
+        let exitFrame = NSRect(
+            x: window.frame.origin.x,
+            y: window.frame.origin.y + 4,
+            width: window.frame.width,
+            height: window.frame.height
+        )
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.15
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             window.animator().alphaValue = 0.0
+            window.animator().setFrame(exitFrame, display: true)
         }, completionHandler: {
             window.orderOut(nil)
         })
@@ -121,6 +134,7 @@ struct PopupHUDContentView: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.primary)
                 }
+                .fixedSize()
                 
                 Spacer()
                 

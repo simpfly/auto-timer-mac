@@ -37,7 +37,6 @@ public struct SectionHeaderView: View {
             Spacer()
         }
         .padding(.horizontal, 2)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
+        .padding(.vertical, 4)
     }
 }

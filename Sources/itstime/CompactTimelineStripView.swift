@@ -90,17 +90,20 @@ public struct CompactTimelineStripView: View {
             }
         }
         
-        // 2. 系统日历日程（若已授权，同步纳入；过滤掉全天日程，仅保留具有明确时刻的日程）
+        // 2. 系统日历日程（若已授权，同步纳入；过滤掉全天日程及已导入为计划的任务，避免时间轴重复渲染）
         if eventKit.isCalendarAuthorized {
             for ev in eventKit.todayCalendarEvents {
                 if !ev.isAllDay && ev.startDate >= now {
-                    list.append(TimelineEventItem(
-                        id: "cal_\(ev.id)",
-                        name: ev.title,
-                        date: ev.startDate,
-                        kind: .calendar,
-                        actionDesc: ev.location ?? "系统日历日程"
-                    ))
+                    // 若已经被导入为应用内定时计划，以应用内计划为准，不重复展示
+                    if !EventKitService.isCalendarEventImported(event: ev, tasks: scheduler.tasks) {
+                        list.append(TimelineEventItem(
+                            id: "cal_\(ev.id)",
+                            name: ev.title,
+                            date: ev.startDate,
+                            kind: .calendar,
+                            actionDesc: ev.location ?? "系统日历日程"
+                        ))
+                    }
                 }
             }
         }
@@ -119,12 +122,12 @@ public struct CompactTimelineStripView: View {
         guard let maxDelta = deltas.last else { return [] }
         
         if count == 1 {
-            return [0.55]
+            return [0.60]
         }
         
-        // 0.0 ~ 0.20 留给当前时间文本（如 12:41）
-        let minRatio: CGFloat = 0.22
-        let maxRatio: CGFloat = 0.92
+        // 留给当前时间文本（如 18:02）足够的排版呼吸空间
+        let minRatio: CGFloat = 0.20
+        let maxRatio: CGFloat = 0.98
         let span = maxRatio - minRatio
         
         // 真实时间差比例映射：时间跨度大时，物理间距成正比拉大
@@ -133,8 +136,8 @@ public struct CompactTimelineStripView: View {
             return minRatio + frac * span
         }
         
-        // 最小防重叠间距保护（当两个事件距离极其接近时，保证至少 30pt 间距，不重叠）
-        let minGap = max(0.12, 30.0 / max(50, trackWidth))
+        // 最小防重叠间距保护（当两个事件距离极其接近时，保证至少 32pt 间距，不重叠）
+        let minGap = max(0.12, 32.0 / max(50, trackWidth))
         for i in 1..<count {
             if ratios[i] - ratios[i - 1] < minGap {
                 ratios[i] = ratios[i - 1] + minGap
@@ -142,8 +145,8 @@ public struct CompactTimelineStripView: View {
         }
         
         // 整体右边界保护（避免溢出）
-        if let last = ratios.last, last > 0.94 {
-            let overflow = last - 0.94
+        if let last = ratios.last, last > 1.0 {
+            let overflow = last - 1.0
             for i in 0..<count {
                 ratios[i] = max(minRatio, ratios[i] - overflow)
             }
@@ -194,10 +197,11 @@ public struct CompactTimelineStripView: View {
     public var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
-            let padL: CGFloat = 12
-            let padR: CGFloat = 14
+            let padL: CGFloat = 16
+            let padR: CGFloat = 22
             let trackW = max(30, w - padL - padR)
-            let trackY: CGFloat = 7
+            let trackY: CGFloat = 7.5
+            let textY: CGFloat = trackY + 12.5
             
             let events = upcomingEvents
             let ratios = computeRatios(for: events, trackWidth: trackW)
@@ -210,7 +214,7 @@ public struct CompactTimelineStripView: View {
                 }
                 .stroke(Color.primary.opacity(0.12), lineWidth: 1.5)
                 
-                // 2. 当前起点标示（左侧小蓝点 + 当前实际时间文本，如 12:41）
+                // 2. 当前起点标示（小蓝圆点 + 下方实际时间文本，严格垂直对齐，无偏移）
                 Circle()
                     .fill(Color.accentColor)
                     .frame(width: 4.5, height: 4.5)
@@ -221,50 +225,54 @@ public struct CompactTimelineStripView: View {
                     .foregroundColor(.secondary.opacity(0.75))
                     .lineLimit(1)
                     .fixedSize()
-                    .position(x: padL + 4, y: trackY + 12)
+                    .position(x: padL, y: textY)
                 
                 // 3. 动态非等比事件节点与时间标注
                 if events.isEmpty {
                     Text("暂无待办")
                         .font(.system(size: 9, weight: .regular))
                         .foregroundColor(.secondary.opacity(0.45))
-                        .position(x: padL + trackW * 0.5, y: trackY + 12)
+                        .position(x: padL + trackW * 0.5, y: textY)
                 } else {
                     ForEach(Array(events.enumerated()), id: \.element.id) { index, item in
                         let r = (index < ratios.count) ? ratios[index] : 0.5
-                        let x = padL + min(0.96, max(0.15, r)) * trackW
+                        let x = padL + min(1.0, max(0.15, r)) * trackW
                         
-                        // 节点微药丸与时间组合列（统一合并为一个 34x24 的舒适触发热区，杜绝断层闪烁）
-                        VStack(spacing: 2.5) {
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(item.kind.color)
-                                .frame(width: 4.5, height: 8.5)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 1.5)
-                                        .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
-                                )
-                            
-                            Text(formattedTime(for: item.date))
-                                .font(.system(size: 9, weight: .medium, design: .rounded))
-                                .foregroundColor(item.kind.color.opacity(0.85))
-                                .lineLimit(1)
-                                .fixedSize()
-                        }
-                        .frame(width: 34, height: 24)
-                        .contentShape(Rectangle())
-                        .onHover { isHover in
-                            if isHover {
-                                hoveredX = x
-                                hoveredEvent = item
-                            } else if hoveredEvent?.id == item.id {
-                                hoveredEvent = nil
+                        // 节点药丸：垂直中心精确落在导轨线 trackY 上（与起点小蓝点完全在同一水平线上）
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(item.kind.color)
+                            .frame(width: 4.5, height: 8.5)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                            )
+                            .position(x: x, y: trackY)
+                        
+                        // 时间文本：严格居中于节点 X 坐标，高度基线与当前时间对齐
+                        Text(formattedTime(for: item.date))
+                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                            .foregroundColor(item.kind.color.opacity(0.85))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .position(x: x, y: textY)
+                        
+                        // 悬停交互热区（覆盖药丸与文字，杜绝断层闪烁）
+                        Color.clear
+                            .frame(width: 36, height: 25)
+                            .contentShape(Rectangle())
+                            .onHover { isHover in
+                                if isHover {
+                                    hoveredX = x
+                                    hoveredEvent = item
+                                } else if hoveredEvent?.id == item.id {
+                                    hoveredEvent = nil
+                                }
                             }
-                        }
-                        .position(x: x, y: trackY + 6)
+                            .position(x: x, y: trackY + 6)
                     }
                 }
                 
-                // 4. 单一精准定位悬浮气泡锚点（彻底解决 ForEach 内多个 Popover 竞争错乱问题）
+                // 4. 单一精准定位悬浮气泡锚点
                 if let _ = hoveredEvent {
                     Color.clear
                         .frame(width: 4, height: 4)
@@ -276,7 +284,7 @@ public struct CompactTimelineStripView: View {
                 }
             }
         }
-        .frame(height: 24)
+        .frame(height: 25)
         .onReceive(timer) { input in
             currentDate = input
         }

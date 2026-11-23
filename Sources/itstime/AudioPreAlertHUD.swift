@@ -18,7 +18,7 @@ public final class AudioPreAlertHUD: ObservableObject {
     
     public init() {}
     
-    /// 更新或展示倒计时预告（3s, 2s, 1s）
+    /// 更新或展示倒计时预告（3s, 2s, 1s），初次出现时轻微弹动入场
     public func update(alert: AudioPreAlertInfo) {
         self.currentAlert = alert
         
@@ -28,32 +28,58 @@ public final class AudioPreAlertHUD: ObservableObject {
         
         guard let window = alertWindow else { return }
         
-        // 贴合在屏幕顶栏右侧菜单栏下方
-        if let screen = NSScreen.main {
-            let screenRect = screen.visibleFrame
-            let x = screenRect.maxX - window.frame.width - 16
-            let y = screen.frame.maxY - 28 - window.frame.height - 6
-            window.setFrameOrigin(NSPoint(x: x, y: y))
-        }
+        // 目标定位：精准贴合在屏幕顶栏右侧菜单栏下方（安全边距 16pt，离顶 10pt）
+        let screen = NSScreen.main ?? NSScreen.screens[0]
+        let screenRect = screen.visibleFrame
+        let targetX = screenRect.maxX - window.frame.width - 16
+        let targetY = screenRect.maxY - window.frame.height - 10
+        let targetFrame = NSRect(x: targetX, y: targetY, width: window.frame.width, height: window.frame.height)
         
         if !window.isVisible {
+            // 起始位置：轻度上浮 8pt
+            let initialFrame = NSRect(x: targetX, y: targetY + 8, width: window.frame.width, height: window.frame.height)
+            // 过冲位置：微弹过冲 2pt
+            let overshootFrame = NSRect(x: targetX, y: targetY - 2, width: window.frame.width, height: window.frame.height)
+            
+            window.setFrame(initialFrame, display: false)
             window.alphaValue = 0.0
             window.orderFrontRegardless()
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.2
+            
+            // 阶段 1：快速滑落至过冲位置并淡入 (0.18s)
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.18
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 window.animator().alphaValue = 1.0
-            }
+                window.animator().setFrame(overshootFrame, display: true)
+            }, completionHandler: {
+                // 阶段 2：轻柔回弹归位至目标位置 (0.10s)
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.10
+                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    window.animator().setFrame(targetFrame, display: true)
+                }
+            })
         }
+        // 如果窗口已经可见（3s -> 2s -> 1s 倒计时进行中），仅静默更新内容，绝不重新触发布局位移引起抖动
     }
     
-    /// 倒计时结束或跳过时关闭气泡
+    /// 倒计时结束或跳过时关闭气泡（轻微上收淡出）
     public func dismiss() {
         self.currentAlert = nil
         guard let window = alertWindow, window.isVisible else { return }
         
+        let exitFrame = NSRect(
+            x: window.frame.origin.x,
+            y: window.frame.origin.y + 4,
+            width: window.frame.width,
+            height: window.frame.height
+        )
+        
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.18
+            context.duration = 0.16
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             window.animator().alphaValue = 0.0
+            window.animator().setFrame(exitFrame, display: true)
         }, completionHandler: {
             window.orderOut(nil)
         })

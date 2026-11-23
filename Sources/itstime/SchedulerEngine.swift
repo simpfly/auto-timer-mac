@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import SwiftUI
 import Combine
 import UserNotifications
 
@@ -32,7 +33,7 @@ public final class SchedulerEngine: ObservableObject {
     private var wakeObserver: Any?
     
     public init() {
-        loadTasks()
+        reloadTasks()
         startTimer()
         setupSleepWakeObservers()
         requestNotificationPermission()
@@ -76,7 +77,7 @@ public final class SchedulerEngine: ObservableObject {
     }
     
     /// 清理合盖休眠期间错过的任务（刷新周期，不补播音频与通知）
-    private func cleanMissedTasksAfterWake() {
+    func cleanMissedTasksAfterWake() {
         let now = Date()
         let calendar = Calendar.current
         var changed = false
@@ -126,7 +127,18 @@ public final class SchedulerEngine: ObservableObject {
         }
     }
     
+    private var canUseNotificationCenter: Bool {
+        guard NSClassFromString("XCTestCase") == nil,
+              ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+              let id = Bundle.main.bundleIdentifier,
+              !id.contains("xctest") else {
+            return false
+        }
+        return true
+    }
+    
     private func requestNotificationPermission() {
+        guard canUseNotificationCenter else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
             if granted {
                 print("✅ 系统通知授权成功")
@@ -134,7 +146,7 @@ public final class SchedulerEngine: ObservableObject {
         }
     }
     
-    private func loadTasks() {
+    func reloadTasks() {
         var loaded: [ScheduleTask] = []
         let taskData = UserDefaults.standard.data(forKey: tasksStorageKey) ?? UserDefaults.standard.data(forKey: legacyTasksStorageKey)
         if let data = taskData,
@@ -142,14 +154,15 @@ public final class SchedulerEngine: ObservableObject {
             loaded = decoded
         }
         
-        let hasEyeTask = loaded.contains { $0.name.contains("护眼") || $0.name.contains("眼保健操") }
+        let hasEyeTask = loaded.contains { $0.name.contains("眼保健操") || $0.name.contains("护眼") }
+        let hasWaterTask = loaded.contains { $0.name.contains("喝杯水") || $0.name.contains("饮水") }
         let hasBaduanjinTask = loaded.contains { $0.name.contains("八段锦") }
         
         if loaded.isEmpty {
             loaded = [
                 ScheduleTask(
-                    name: "护眼",
-                    trigger: .interval(intervalSeconds: 30 * 60),
+                    name: "做眼保健操",
+                    trigger: .interval(intervalSeconds: 45 * 60),
                     action: .playLocalAudio(
                         filePath: "Resources/Audio/眼保健操.mp3",
                         displayName: "眼保健操",
@@ -157,6 +170,12 @@ public final class SchedulerEngine: ObservableObject {
                         volume: 0.8,
                         durationSeconds: nil
                     ),
+                    isEnabled: true
+                ),
+                ScheduleTask(
+                    name: "喝杯水",
+                    trigger: .interval(intervalSeconds: 30 * 60),
+                    action: .popupContent(mode: .textNotification(message: "喝杯水")),
                     isEnabled: true
                 ),
                 ScheduleTask(
@@ -173,11 +192,11 @@ public final class SchedulerEngine: ObservableObject {
                 )
             ]
         } else {
-            // 已有旧数据时，智能补充预设音频任务
+            // 已有旧数据时，智能补充预设任务
             if !hasEyeTask {
                 loaded.append(ScheduleTask(
-                    name: "护眼",
-                    trigger: .interval(intervalSeconds: 30 * 60),
+                    name: "做眼保健操",
+                    trigger: .interval(intervalSeconds: 45 * 60),
                     action: .playLocalAudio(
                         filePath: "Resources/Audio/眼保健操.mp3",
                         displayName: "眼保健操",
@@ -185,6 +204,14 @@ public final class SchedulerEngine: ObservableObject {
                         volume: 0.8,
                         durationSeconds: nil
                     ),
+                    isEnabled: true
+                ))
+            }
+            if !hasWaterTask {
+                loaded.append(ScheduleTask(
+                    name: "喝杯水",
+                    trigger: .interval(intervalSeconds: 30 * 60),
+                    action: .popupContent(mode: .textNotification(message: "喝杯水")),
                     isEnabled: true
                 ))
             }
@@ -212,10 +239,25 @@ public final class SchedulerEngine: ObservableObject {
             return false
         }
         
-        // 平滑迁移旧数据中的任务名称（去“工间”，叫“八段锦”）
+        // 平滑迁移旧数据中的任务名称与清理不可编辑的副文本
         for i in 0..<loaded.count {
+            if loaded[i].name == "做眼保健操" || loaded[i].name == "眼保健操与活动" || loaded[i].name == "护眼" {
+                loaded[i].name = "做眼保健操"
+                if case .interval(let sec) = loaded[i].trigger, sec == 30 * 60 {
+                    loaded[i].trigger = .interval(intervalSeconds: 45 * 60)
+                }
+            }
+            if loaded[i].name == "站立与饮水提醒" {
+                loaded[i].name = "喝杯水"
+            }
             if loaded[i].name == "工间八段锦" {
                 loaded[i].name = "八段锦"
+            }
+            // 清除写死的、不可编辑的文本提醒副文本
+            if case .popupContent(let mode) = loaded[i].action {
+                if case .textNotification = mode {
+                    loaded[i].action = .popupContent(mode: .textNotification(message: loaded[i].name))
+                }
             }
         }
         
@@ -236,7 +278,7 @@ public final class SchedulerEngine: ObservableObject {
             }
     }
     
-    private func onTick() {
+    func onTick() {
         guard !isSystemSleeping else { return }
         let now = Date()
         let timeGap = now.timeIntervalSince(lastTickDate)
@@ -410,16 +452,26 @@ public final class SchedulerEngine: ObservableObject {
             AudioService.shared.playNotificationChime()
             if case .textNotification(let msg) = mode {
                 let alertMsg = msg.isEmpty ? task.name : msg
+                // 根据任务触发类型获取专属高亮颜色
+                let taskColor: Color
+                switch task.trigger {
+                case .countdown, .once:
+                    taskColor = .orange
+                case .daily:
+                    taskColor = .indigo
+                case .interval:
+                    taskColor = .teal
+                }
                 // 纯文本提醒：在菜单栏图标下方弹出专属提醒卡片，等待用户确认
-                TextAlertHUD.shared.show(title: task.name, message: alertMsg)
+                TextAlertHUD.shared.show(title: task.name, message: alertMsg, color: taskColor)
             } else {
                 PopupHUDManager.shared.show(for: task, mode: mode)
             }
             let notifyTitle: String
             let notifyBody: String
-            if case .textNotification(let msg) = mode {
+            if case .textNotification = mode {
                 notifyTitle = "文本提醒"
-                notifyBody = "「\(msg.isEmpty ? task.name : msg)」"
+                notifyBody = "「\(task.name)」"
             } else {
                 notifyTitle = "定时提醒"
                 notifyBody = "「\(task.name)」时间已到"
@@ -466,6 +518,7 @@ public final class SchedulerEngine: ObservableObject {
     }
     
     private func notify(title: String, body: String, withSystemSound: Bool = false) {
+        guard canUseNotificationCenter else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

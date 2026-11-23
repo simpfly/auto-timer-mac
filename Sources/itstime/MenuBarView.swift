@@ -30,17 +30,13 @@ struct MenuBarView: View {
                 return true
             }
             .sorted { (t1, t2) -> Bool in
-                // 1. 启用的排在未启用的前面
-                if t1.isEnabled != t2.isEnabled {
-                    return t1.isEnabled && !t2.isEnabled
-                }
-                // 2. 均启用时按最近下一次触发时间从早到晚排序
+                // 方案 B：按最近下一次触发时间从早到晚排序，开关切换时不重排移位
                 let d1 = t1.calculateNextTriggerDate(from: now) ?? Date.distantFuture
                 let d2 = t2.calculateNextTriggerDate(from: now) ?? Date.distantFuture
                 if d1 != d2 {
                     return d1 < d2
                 }
-                // 3. 时间相同时按创建时间排序
+                // 时间相同时按创建时间排序
                 return t1.createdAt < t2.createdAt
             }
     }
@@ -60,16 +56,8 @@ struct MenuBarView: View {
                 // 2. 主区域（三级明确视觉层次）
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 12) {
-                        // Section 1: 快捷创建与时间流动轴同行并列
-                        HStack(alignment: .center) {
-                            SectionHeaderView(icon: "bolt.fill", title: "快捷创建", accentColor: .accentColor)
-                            Spacer()
-                            CompactTimelineStripView()
-                                .frame(width: 200)
-                        }
-                        
-                        // 全功能内联创建与编辑（零弹窗）
-                        QuickTaskCreateView(editingTask: $editingTask)
+                        // Section 1: 快捷创建面板（提醒类型选择器替代静态标题，与时间流动轴同行）
+                        QuickTaskCreateView(editingTask: $editingTask, timelineWidth: 200)
                         
                         // Section 2: 倒计时特写看板 (若存在进行中的倒计时)
                         if !activeCountdownTasks.isEmpty {
@@ -135,40 +123,22 @@ struct MenuBarView: View {
         .disableFocusEffect()
     }
     
-    // MARK: - 顶栏
+    // MARK: - 顶栏 (极简流式排版：品牌标识稳固居左，播放 HUD 自然容纳，绝无重叠)
     private var headerBar: some View {
-        HStack(alignment: .center) {
-            HStack(spacing: 6) {
-                Image(systemName: "timer")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.accentColor)
-                
-                Text("It's Time")
-                    .font(.system(size: 14, weight: .bold))
-                
-                let activeCount = scheduler.tasks.filter { $0.isEnabled }.count
-                if activeCount > 0 {
-                    Text("\(activeCount)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.accentColor)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1.5)
-                        .background(Color.accentColor.opacity(0.12))
-                        .clipShape(Capsule())
-                }
-            }
+        HStack(alignment: .center, spacing: 8) {
+            // 左侧：纯粹品牌标题（无数字角标干扰，绝对稳定）
+            BrandTitleView()
+                .fixedSize()
             
-            Spacer()
+            Spacer(minLength: 8)
             
-            // 中间：若正在试听/播放音频，静默嵌入顶栏正中微 HUD 胶囊（绝不引起下方卡片弹跳！）
+            // 中右侧：播放 HUD（在 Spacer 与更多按钮之间自然排列，两端完全隔离，绝无重叠）
             if audioService.isPlaying {
                 headerPlayingHUD
-                    .transition(.opacity)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.16)))
             }
             
-            Spacer()
-            
-            // 更多功能菜单（收拢主窗口、日历与提醒、运行控制、设置与退出，和右键菜单保持一致）
+            // 右侧：更多功能菜单
             Menu {
                 // 1. 窗口与功能
                 Button {
@@ -245,9 +215,11 @@ struct MenuBarView: View {
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
+            .fixedSize()
             .focusable(false)
             .help("更多功能与设置")
         }
+        .frame(height: 26)
     }
     
     // MARK: - 单卡片复用构建
@@ -324,7 +296,7 @@ struct MenuBarView: View {
             .help("停止试听/播放")
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 3.5)
+        .frame(height: 24)
         .background(Color.green.opacity(0.12))
         .clipShape(Capsule())
         .overlay(

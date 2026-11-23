@@ -118,12 +118,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
             )
             button.attributedTitle = attr
         } else {
-            let symbolName = "timer"
-            let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-            let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "It's Time")?
-                .withSymbolConfiguration(config)
-            image?.isTemplate = true
-            button.image = image
+            button.image = BrandIcon.menuBar
             button.imagePosition = .imageLeft
             
             if let summary = SchedulerEngine.shared.activeCountdownSummary {

@@ -87,11 +87,29 @@ struct CalendarSyncSheet: View {
     // MARK: - 已授权内容界面
     private var authorizedContentView: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("", selection: $selectedTab) {
-                Text("日历日程 (\(eventKit.todayCalendarEvents.count))").tag(0)
-                Text("提醒事项 (\(eventKit.todayReminders.count))").tag(1)
+            HStack {
+                Picker("", selection: $selectedTab) {
+                    Text("日历日程 (\(eventKit.todayCalendarEvents.count))").tag(0)
+                    Text("提醒事项 (\(eventKit.todayReminders.count))").tag(1)
+                }
+                .pickerStyle(.segmented)
+                
+                Spacer()
+                
+                // 一键导入未排日程快捷操作
+                if selectedTab == 0 && !unimportedEvents.isEmpty {
+                    Button(action: importAllRemainingCalendarEvents) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.and.arrow.down.on.square")
+                                .font(.system(size: 10))
+                            Text("一键导入今日 (\(unimportedEvents.count))")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
             }
-            .pickerStyle(.segmented)
             
             if let feedback = importedFeedbackText {
                 HStack(spacing: 6) {
@@ -119,42 +137,111 @@ struct CalendarSyncSheet: View {
         }
     }
     
+    private var unimportedEvents: [SystemCalendarEvent] {
+        eventKit.todayCalendarEvents.filter { ev in
+            !ev.isPast && !EventKitService.isCalendarEventImported(event: ev, tasks: scheduler.tasks)
+        }
+    }
+    
     // MARK: - 日历事件列表
     private var calendarEventsList: some View {
         Group {
             if eventKit.todayCalendarEvents.isEmpty {
-                emptyListView(message: "暂无日程")
+                emptyListView(message: "暂无今日日程")
             } else {
                 ForEach(eventKit.todayCalendarEvents, id: \.id) { ev in
+                    let isImported = EventKitService.isCalendarEventImported(event: ev, tasks: scheduler.tasks)
+                    
                     HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(ev.title)
-                                .font(.system(size: 13, weight: .medium))
-                                .lineLimit(1)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text(ev.title)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .strikethrough(ev.isPast)
+                                    .foregroundColor(ev.isPast ? .secondary : .primary)
+                                    .lineLimit(1)
+                                
+                                if ev.isOngoing {
+                                    Text("进行中")
+                                        .font(.system(size: 9.5, weight: .semibold))
+                                        .foregroundColor(.blue)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1.5)
+                                        .background(Color.blue.opacity(0.12))
+                                        .clipShape(Capsule())
+                                } else if ev.isPast {
+                                    Text("已结束")
+                                        .font(.system(size: 9.5))
+                                        .foregroundColor(.secondary)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1.5)
+                                        .background(Color.secondary.opacity(0.12))
+                                        .clipShape(Capsule())
+                                }
+                            }
                             
                             HStack(spacing: 6) {
                                 Text(ev.formattedTime)
                                     .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.accentColor)
+                                    .foregroundColor(ev.isPast ? .secondary : (ev.isOngoing ? .blue : .accentColor))
                                 
                                 if ev.url != nil {
-                                    Text("· 含会议链接")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.secondary)
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "link")
+                                            .font(.system(size: 9))
+                                        Text("含链接")
+                                            .font(.system(size: 10))
+                                    }
+                                    .foregroundColor(.blue)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(Color.blue.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
                                 }
                             }
                         }
                         
                         Spacer()
                         
-                        Button("+ 导入") {
-                            importCalendarEvent(ev)
+                        if isImported {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("已在计划中")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.primary.opacity(0.06))
+                            .clipShape(Capsule())
+                        } else if ev.isPast {
+                            Text("已过时")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary.opacity(0.6))
+                        } else {
+                            HStack(spacing: 6) {
+                                Button(action: {
+                                    prefillCalendarEvent(ev)
+                                }) {
+                                    Image(systemName: "square.and.pencil")
+                                        .font(.system(size: 11))
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .help("填入输入框微调")
+                                
+                                Button("+ 导入") {
+                                    importCalendarEvent(ev)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
                     }
                     .padding(10)
                     .glassCard(cornerRadius: 8)
+                    .opacity(ev.isPast ? 0.6 : 1.0)
                 }
             }
         }
@@ -167,25 +254,89 @@ struct CalendarSyncSheet: View {
                 emptyListView(message: "暂无未完成事项")
             } else {
                 ForEach(eventKit.todayReminders, id: \.id) { rem in
+                    let isImported = EventKitService.isReminderImported(reminder: rem, tasks: scheduler.tasks)
+                    
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(rem.title)
                                 .font(.system(size: 13, weight: .medium))
                                 .lineLimit(1)
                             
-                            Text(rem.formattedTime)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(.secondary)
+                            HStack(spacing: 6) {
+                                Text(rem.formattedTime)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(rem.isOverdue ? .orange : (rem.hasSpecificTime ? .accentColor : .secondary))
+                                
+                                if rem.url != nil {
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "link")
+                                            .font(.system(size: 9))
+                                        Text("含链接")
+                                            .font(.system(size: 10))
+                                    }
+                                    .foregroundColor(.blue)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(Color.blue.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                                }
+                            }
                         }
                         
                         Spacer()
                         
-                        Button("+ 导入") {
-                            importReminder(rem)
+                        if isImported {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("已在计划中")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.primary.opacity(0.06))
+                            .clipShape(Capsule())
+                        } else if rem.hasSpecificTime && !rem.isOverdue {
+                            HStack(spacing: 6) {
+                                Button(action: {
+                                    prefillReminder(rem)
+                                }) {
+                                    Image(systemName: "square.and.pencil")
+                                        .font(.system(size: 11))
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .help("填入输入框微调")
+                                
+                                Button("+ 导入") {
+                                    importReminder(rem)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            }
+                        } else {
+                            HStack(spacing: 6) {
+                                Button("转为 25m 专注") {
+                                    importReminderAsCountdown(rem, minutes: 25)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                                .help("直接转为 25 分钟倒计时专注计划")
+                                
+                                Button(action: {
+                                    prefillReminder(rem)
+                                }) {
+                                    Image(systemName: "square.and.pencil")
+                                        .font(.system(size: 11))
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .help("填入主输入框自定义时间")
+                            }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
                     }
+                    .padding(10)
                     .padding(10)
                     .glassCard(cornerRadius: 8)
                 }
@@ -207,47 +358,132 @@ struct CalendarSyncSheet: View {
         .padding(.vertical, 30)
     }
     
-    // MARK: - 导入逻辑
-    private func importCalendarEvent(_ ev: SystemCalendarEvent) {
+    // MARK: - 导入与填入逻辑
+    private func prefillCalendarEvent(_ ev: SystemCalendarEvent) {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: ev.startDate)
-        let trigger = TriggerType.daily(hour: comps.hour ?? 9, minute: comps.minute ?? 0)
+        eventKit.prefilledDraft = PrefilledTaskDraft(
+            title: ev.title,
+            targetURLString: ev.url?.absoluteString,
+            targetHour: comps.hour,
+            targetMinute: comps.minute,
+            suggestedCountdownMinutes: nil,
+            isAllDay: ev.isAllDay
+        )
+        dismiss()
+        WindowManager.shared.closeCalendarSyncWindow()
+    }
+    
+    private func prefillReminder(_ rem: SystemReminderTask) {
+        let comps = rem.dueDate.map { Calendar.current.dateComponents([.hour, .minute], from: $0) }
+        let hour = rem.hasSpecificTime ? comps?.hour : nil
+        let minute = rem.hasSpecificTime ? comps?.minute : nil
+        let countdown = rem.hasSpecificTime ? nil : 25
+        
+        eventKit.prefilledDraft = PrefilledTaskDraft(
+            title: rem.title,
+            targetURLString: rem.url?.absoluteString,
+            targetHour: hour,
+            targetMinute: minute,
+            suggestedCountdownMinutes: countdown,
+            isAllDay: !rem.hasSpecificTime
+        )
+        dismiss()
+        WindowManager.shared.closeCalendarSyncWindow()
+    }
+    
+    private func importCalendarEvent(_ ev: SystemCalendarEvent) {
+        let trigger: TriggerType
+        let now = Date()
+        
+        if ev.isAllDay {
+            let hour = Calendar.current.component(.hour, from: now)
+            let defaultHour = (hour < 9) ? 9 : min(hour + 1, 23)
+            trigger = .daily(hour: defaultHour, minute: 0)
+        } else if ev.isOngoing {
+            trigger = .once(ev.endDate)
+        } else if ev.startDate > now {
+            trigger = .once(ev.startDate)
+        } else {
+            let comps = Calendar.current.dateComponents([.hour, .minute], from: ev.startDate)
+            trigger = .daily(hour: comps.hour ?? 9, minute: comps.minute ?? 0)
+        }
         
         let action: ActionType
         if let url = ev.url {
             action = .openURL(urlString: url.absoluteString)
         } else {
-            action = .none // 纯定时提醒
+            action = .none
+        }
+        
+        let taskName: String
+        if ev.isOngoing {
+            taskName = "\(ev.title) (结束)"
+        } else {
+            taskName = ev.title
         }
         
         let task = ScheduleTask(
-            name: ev.title,
+            name: taskName,
             trigger: trigger,
             action: action,
             isEnabled: true
         )
         scheduler.addTask(task)
+        showFeedback("已导入「\(taskName)」")
+    }
+    
+    private func importAllRemainingCalendarEvents() {
+        let targets = unimportedEvents
+        guard !targets.isEmpty else { return }
         
-        showFeedback("已导入「\(ev.title)」")
+        var count = 0
+        for ev in targets {
+            importCalendarEvent(ev)
+            count += 1
+        }
+        showFeedback("已批量导入 \(count) 项日程")
     }
     
     private func importReminder(_ rem: SystemReminderTask) {
-        let trigger: TriggerType
-        if let d = rem.dueDate {
-            let comps = Calendar.current.dateComponents([.hour, .minute], from: d)
-            trigger = .daily(hour: comps.hour ?? 9, minute: comps.minute ?? 0)
+        guard let due = rem.dueDate, rem.hasSpecificTime, !rem.isOverdue else {
+            importReminderAsCountdown(rem, minutes: 25)
+            return
+        }
+        
+        let trigger = TriggerType.once(due)
+        let action: ActionType
+        if let url = rem.url {
+            action = .openURL(urlString: url.absoluteString)
         } else {
-            trigger = .countdown(totalSeconds: 30 * 60)
+            action = .none
         }
         
         let task = ScheduleTask(
             name: rem.title,
             trigger: trigger,
-            action: .none,
+            action: action,
             isEnabled: true
         )
         scheduler.addTask(task)
-        
         showFeedback("已导入「\(rem.title)」")
+    }
+    
+    private func importReminderAsCountdown(_ rem: SystemReminderTask, minutes: Int) {
+        let action: ActionType
+        if let url = rem.url {
+            action = .openURL(urlString: url.absoluteString)
+        } else {
+            action = .none
+        }
+        
+        let task = ScheduleTask(
+            name: rem.title,
+            trigger: .countdown(totalSeconds: minutes * 60),
+            action: action,
+            isEnabled: true
+        )
+        scheduler.addTask(task)
+        showFeedback("已转为 \(minutes)m 专注计划「\(rem.title)」")
     }
     
     private func showFeedback(_ text: String) {
