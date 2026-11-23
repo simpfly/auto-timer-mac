@@ -318,66 +318,65 @@ struct QuickTaskCreateView: View {
         .onChange(of: intervalTimeString) { newValue in
             syncIntervalFromInput(newValue)
         }
-        .overlay {
-            if isActionPickerExpanded {
-                Color.black.opacity(0.001)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.12)) {
-                            isActionPickerExpanded = false
-                        }
-                    }
-                    .zIndex(10)
-            }
-        }
     }
     
-    // MARK: - 提醒方式下拉选择器（等宽严丝合缝，选中项勾替换图标，支持点击切换）
+    // MARK: - 提醒方式下拉选择器（像素级对齐，箭头展开/收起联动，绝对零挤压，选项必响应）
     private var actionKindPicker: some View {
-        ZStack(alignment: .topLeading) {
-            // 1. 触发按钮（固定宽度 112）
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isActionPickerExpanded.toggle()
-                }
-            }) {
-                HStack(spacing: 5) {
-                    Image(systemName: actionKind.icon)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.accentColor)
-                        .frame(width: 16, alignment: .center)
-                    Text(actionKind.title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                        .fixedSize()
-                    Spacer(minLength: 0)
-                    Image(systemName: isActionPickerExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.secondary.opacity(0.8))
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .frame(width: 112)
-                .background(Color.primary.opacity(isActionPickerExpanded ? 0.1 : 0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.14)) {
+                isActionPickerExpanded.toggle()
             }
-            .buttonStyle(.plain)
-            .help("选择到期提醒动作")
-            
-            // 2. 展开菜单（同级浮层，宽度与按钮完全一致为 112，上下完全对齐重合）
+        }) {
+            HStack(spacing: 4) {
+                Text(actionKind.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary.opacity(0.9))
+                    .lineLimit(1)
+                    .fixedSize()
+                
+                Spacer(minLength: 2)
+                
+                Image(systemName: isActionPickerExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.secondary.opacity(0.75))
+            }
+            .padding(.horizontal, 8)
+            .frame(width: 104, height: 24)
+            .background(Color.primary.opacity(isActionPickerExpanded ? 0.1 : 0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 0.8)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .topLeading) {
             if isActionPickerExpanded {
-                actionKindDropdownList
-                    .offset(y: 28)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
-                    .zIndex(200)
+                ZStack(alignment: .topLeading) {
+                    // 全局透明背景：捕获外部点击平滑收起
+                    Color.black.opacity(0.0001)
+                        .frame(width: 1200, height: 1200)
+                        .offset(x: -600, y: -600)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.12)) {
+                                isActionPickerExpanded = false
+                            }
+                        }
+                    
+                    // 下拉卡片：处于透明背景上层，紧贴按钮底边展开，文字像素级对齐
+                    actionKindDropdownList
+                        .offset(y: 25)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
+                }
             }
         }
-        .frame(width: 112, height: isActionPickerExpanded ? 148 : 24, alignment: .topLeading)
+        .zIndex(500)
+        .help("选择到期提醒动作")
     }
     
-    // MARK: - 提醒方式展开列表（选中勾替换图标，首字严格垂直左对齐，与触发器等宽对齐）
+    // MARK: - 提醒方式展开列表（与按钮 104pt 严丝合缝，文字基准线垂直严格对齐，零挤压）
     private var actionKindDropdownList: some View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(TaskActionKind.allCases) { kind in
@@ -391,29 +390,31 @@ struct QuickTaskCreateView: View {
                         isActionPickerExpanded = false
                     }
                 }) {
-                    HStack(spacing: 6) {
-                        // 1. 选中的项直接用勾替换图标！未选中的显示对应功能图标
-                        Image(systemName: isSelected ? "checkmark" : kind.icon)
-                            .font(.system(size: isSelected ? 10 : 12, weight: isSelected ? .bold : .medium))
-                            .foregroundColor(isSelected ? .accentColor : .secondary)
-                            .frame(width: 16, alignment: .center)
-                        
-                        // 2. 文字标签：严格自同一条基准线左对齐
+                    HStack(spacing: 4) {
+                        // 1. 文字标签：左侧内边距 4 + 卡片内边距 4 = 8pt，与上方按钮文字起始线完全同一基准对齐
                         Text(kind.title)
                             .font(.system(size: 12, weight: isSelected ? .medium : .regular))
                             .foregroundColor(isSelected ? .primary : .primary.opacity(0.85))
                             .lineLimit(1)
                             .fixedSize()
                         
-                        Spacer(minLength: 0)
+                        Spacer(minLength: 4)
+                        
+                        // 2. 选中的项在右侧显示对勾，绝不破坏左侧文字垂直对齐基准线
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.accentColor)
+                        }
                     }
                     .padding(.horizontal, 4)
                     .padding(.vertical, 5)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        isSelected ? Color.primary.opacity(0.06) : (hoveredActionKind == kind ? Color.primary.opacity(0.04) : Color.clear)
+                        isSelected ? Color.primary.opacity(0.08) : (hoveredActionKind == kind ? Color.primary.opacity(0.04) : Color.clear)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .onHover { isHovered in
@@ -422,15 +423,15 @@ struct QuickTaskCreateView: View {
             }
         }
         .padding(4)
-        .frame(width: 112)
+        .frame(width: 104)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color(NSColor.windowBackgroundColor))
-                .shadow(color: Color.black.opacity(0.14), radius: 8, x: 0, y: 4)
+                .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.primary.opacity(0.1), lineWidth: 0.8)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 0.8)
         )
     }
     
