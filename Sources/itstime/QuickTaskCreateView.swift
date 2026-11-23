@@ -419,11 +419,17 @@ struct QuickTaskCreateView: View {
                 .buttonStyle(.plain)
                 .onHover { isHovered in
                     hoveredActionKind = isHovered ? kind : nil
+                    if isHovered {
+                        NSCursor.arrow.set()
+                    }
                 }
             }
         }
         .padding(3)
         .frame(width: 80)
+        .background(
+            ArrowCursorView()
+        )
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color(NSColor.windowBackgroundColor))
@@ -1512,5 +1518,22 @@ private struct UnifiedTimeStepperView: View {
                 onPlus()
             }
         }
+    }
+}
+
+// MARK: - 锁定标准鼠标箭头指针的微组件（彻底阻断下方 TextField 的 I-Beam 穿透）
+private struct ArrowCursorView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = ArrowCursorNSView()
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class ArrowCursorNSView: NSView {
+    override func resetCursorRects() {
+        discardCursorRects()
+        addCursorRect(bounds, cursor: .arrow)
     }
 }
