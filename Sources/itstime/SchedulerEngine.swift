@@ -170,12 +170,6 @@ public final class SchedulerEngine: ObservableObject {
                         durationSeconds: nil
                     ),
                     isEnabled: true
-                ),
-                ScheduleTask(
-                    name: "倒计时",
-                    trigger: .countdown(totalSeconds: 25 * 60),
-                    action: .none,
-                    isEnabled: false
                 )
             ]
         } else {
@@ -208,6 +202,14 @@ public final class SchedulerEngine: ObservableObject {
                     isEnabled: true
                 ))
             }
+        }
+        
+        // 自动清理早会与预设番茄钟
+        loaded.removeAll { task in
+            let name = task.name
+            if name.contains("早会") { return true }
+            if name == "倒计时" || name == "深度专注番茄钟" || name == "番茄钟" { return true }
+            return false
         }
         
         // 平滑迁移旧数据中的任务名称（去“工间”，叫“八段锦”）
