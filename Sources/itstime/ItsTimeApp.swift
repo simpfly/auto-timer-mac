@@ -20,12 +20,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         // 启动时自动展开菜单栏主面板，让用户直观看到当前界面
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            StatusItemManager.shared.togglePopover()
+            StatusItemManager.shared.openPopover()
+            if CommandLine.arguments.contains("--open-window") {
+                WindowManager.shared.openMainWindow()
+            }
         }
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        StatusItemManager.shared.togglePopover()
+        StatusItemManager.shared.openPopover()
+        WindowManager.shared.openMainWindow()
         return true
     }
     

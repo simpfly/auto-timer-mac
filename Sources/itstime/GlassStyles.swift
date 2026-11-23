@@ -20,14 +20,14 @@ public struct GlassBackgroundView: NSViewRepresentable {
     public func makeNSView(context: Context) -> NSVisualEffectView {
         let visualEffectView = NSVisualEffectView()
         visualEffectView.material = material
-        visualEffectView.blendingMode = blendingMode
+        visualEffectView.blendingMode = .withinWindow
         visualEffectView.state = state
         return visualEffectView
     }
     
     public func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
-        nsView.blendingMode = blendingMode
+        nsView.blendingMode = .withinWindow
         nsView.state = state
     }
 }
