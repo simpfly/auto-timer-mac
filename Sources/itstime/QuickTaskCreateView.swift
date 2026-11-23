@@ -340,8 +340,8 @@ struct QuickTaskCreateView: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary.opacity(0.75))
             }
-            .padding(.horizontal, 8)
-            .frame(width: 104, height: 24)
+            .padding(.horizontal, 7)
+            .frame(width: 80, height: 24)
             .background(Color.primary.opacity(isActionPickerExpanded ? 0.1 : 0.06))
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .overlay(
@@ -365,9 +365,9 @@ struct QuickTaskCreateView: View {
                             }
                         }
                     
-                    // 下拉卡片：处于透明背景上层，紧贴按钮底边展开，文字像素级对齐
+                    // 下拉卡片：处于透明背景上层，紧密咬合按钮底边展开，完全消除悬空缝隙，文字像素级对齐
                     actionKindDropdownList
-                        .offset(y: 25)
+                        .offset(y: 22)
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
                 }
             }
@@ -376,7 +376,7 @@ struct QuickTaskCreateView: View {
         .help("选择到期提醒动作")
     }
     
-    // MARK: - 提醒方式展开列表（与按钮 104pt 严丝合缝，文字基准线垂直严格对齐，零挤压）
+    // MARK: - 提醒方式展开列表（与按钮 80pt 严丝合缝，文字基准线垂直严格对齐，零挤压）
     private var actionKindDropdownList: some View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(TaskActionKind.allCases) { kind in
@@ -391,14 +391,14 @@ struct QuickTaskCreateView: View {
                     }
                 }) {
                     HStack(spacing: 4) {
-                        // 1. 文字标签：左侧内边距 4 + 卡片内边距 4 = 8pt，与上方按钮文字起始线完全同一基准对齐
+                        // 1. 文字标签：左侧内边距 4 + 卡片内边距 3 = 7pt，与上方按钮文字起始线完全同一基准对齐
                         Text(kind.title)
                             .font(.system(size: 12, weight: isSelected ? .medium : .regular))
                             .foregroundColor(isSelected ? .primary : .primary.opacity(0.85))
                             .lineLimit(1)
                             .fixedSize()
                         
-                        Spacer(minLength: 4)
+                        Spacer(minLength: 2)
                         
                         // 2. 选中的项在右侧显示对勾，绝不破坏左侧文字垂直对齐基准线
                         if isSelected {
@@ -408,7 +408,7 @@ struct QuickTaskCreateView: View {
                         }
                     }
                     .padding(.horizontal, 4)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         isSelected ? Color.primary.opacity(0.08) : (hoveredActionKind == kind ? Color.primary.opacity(0.04) : Color.clear)
@@ -422,8 +422,8 @@ struct QuickTaskCreateView: View {
                 }
             }
         }
-        .padding(4)
-        .frame(width: 104)
+        .padding(3)
+        .frame(width: 80)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color(NSColor.windowBackgroundColor))
