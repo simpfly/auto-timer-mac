@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/icon.png" width="128" height="128" alt="AutoTimer Mac Icon" />
+<img src="assets/icon.png" width="128" height="128" alt="It's Time Mac Icon" />
 
-# AutoTimer for Mac
+# It's Time for Mac
 
 **专为专注与日常节奏打造的 macOS 原生极简定时自动化助手**
 
@@ -17,7 +17,7 @@
 
 ---
 
-## 💡 为什么选择 AutoTimer？
+## 💡 为什么选择 It's Time？
 
 在日常办公与专注工作流中，我们常常需要：
 - **番茄钟专注或眼保健操提醒**：到期平滑播放一段舒缓的本地白噪音或提示音，而不是刺耳突兀的闹铃。
@@ -25,7 +25,7 @@
 - **任务切换清单弹窗**：时间到达时，在屏幕中央轻巧浮出待办事项（Checklist），帮助思绪快速着陆。
 - **安静陪伴无感常驻**：绝不打扰正常工作，常驻菜单栏，极低资源占用。
 
-**AutoTimer** 正是为此而生：完全采用 Swift 与原生 SwiftUI 构建，深度契合 macOS 人机交互指南与半透明毛玻璃材质，提供直观平缓的时间管理体验。
+**It's Time** 正是为此而生：完全采用 Swift 与原生 SwiftUI 构建，深度契合 macOS 人机交互指南与半透明毛玻璃材质，提供直观平缓的时间管理体验。
 
 ---
 
@@ -35,7 +35,7 @@
 支持**倒计时（番茄钟）**、**每日定时**与**循环间隔**三种时间模式，并可自由配置**仅系统提醒**、**清单/日程弹窗**、**播放本地音频**及**打开指定链接**。
 
 <div align="center">
-  <img src="assets/screenshots/modes-overview.png" width="90%" alt="AutoTimer 核心模式一览" />
+  <img src="assets/screenshots/modes-overview.png" width="90%" alt="It's Time 核心模式一览" />
 </div>
 
 <br/>
@@ -44,7 +44,7 @@
 通过直观的时钟表盘点击与圆弧拖拽，快速设定目标提醒时刻，带来符合直觉的交互手感。
 
 <div align="center">
-  <img src="assets/screenshots/interactive-dial.png" width="90%" alt="AutoTimer 拟物化表盘交互" />
+  <img src="assets/screenshots/interactive-dial.png" width="90%" alt="It's Time 拟物化表盘交互" />
 </div>
 
 ---
@@ -84,7 +84,7 @@
 ### 方式一：直接运行已编译版本
 本项目已预置构建完成的原生应用产物：
 ```bash
-open AutoTimer.app
+open "It's Time.app"
 ```
 
 ### 方式二：从源码构建
@@ -101,7 +101,7 @@ cd auto-timer-mac
 chmod +x build_app.sh
 ./build_app.sh
 ```
-打包脚本将自动使用 Release 模式编译 Swift 代码、合成 `.icns` 矢量图标、生成符合 Apple 规范的 `AutoTimer.app` 包体。
+打包脚本将自动使用 Release 模式编译 Swift 代码、合成 `.icns` 矢量图标、生成符合 Apple 规范的 `It's Time.app` 包体。
 
 ---
 
@@ -110,8 +110,8 @@ chmod +x build_app.sh
 ```text
 auto-timer-mac/
 ├── Sources/
-│   └── AutoTimerMac/
-│       ├── AutoTimerApp.swift          # 应用生命周期入口与代理
+│   └── itstime/
+│       ├── ItsTimeApp.swift            # 应用生命周期入口与代理
 │       ├── StatusItemManager.swift     # 菜单栏常驻管理与 Popover 控制
 │       ├── MainWindowView.swift        # 主任务列表与时间轴管理窗口
 │       ├── MenuBarView.swift           # 菜单栏展开微型面板

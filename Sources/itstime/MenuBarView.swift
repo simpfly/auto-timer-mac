@@ -143,7 +143,7 @@ struct MenuBarView: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.accentColor)
                 
-                Text("AutoTimer")
+                Text("It's Time")
                     .font(.system(size: 14, weight: .bold))
                 
                 let activeCount = scheduler.tasks.filter { $0.isEnabled }.count
@@ -218,13 +218,13 @@ struct MenuBarView: View {
                     NSApplication.shared.activate(ignoringOtherApps: true)
                     NSApplication.shared.orderFrontStandardAboutPanel(
                         options: [
-                            NSApplication.AboutPanelOptionKey.applicationName: "AutoTimer",
+                            NSApplication.AboutPanelOptionKey.applicationName: "It's Time",
                             NSApplication.AboutPanelOptionKey.version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
                         ]
                     )
                 } label: {
                     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-                    Label("关于 AutoTimer (v\(appVersion))", systemImage: "info.circle")
+                    Label("关于 It's Time (v\(appVersion))", systemImage: "info.circle")
                 }
                 
                 Divider()
@@ -233,7 +233,7 @@ struct MenuBarView: View {
                 Button(role: .destructive) {
                     NSApplication.shared.terminate(nil)
                 } label: {
-                    Label("退出 AutoTimer", systemImage: "power")
+                    Label("退出 It's Time", systemImage: "power")
                 }
             } label: {
                 Image(systemName: "ellipsis")

@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "AutoTimerMac",
+    name: "itstime",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "AutoTimerMac", targets: ["AutoTimerMac"])
+        .executable(name: "itstime", targets: ["itstime"])
     ],
     targets: [
         .executableTarget(
-            name: "AutoTimerMac",
-            path: "Sources/AutoTimerMac"
+            name: "itstime",
+            path: "Sources/itstime"
         )
     ]
 )

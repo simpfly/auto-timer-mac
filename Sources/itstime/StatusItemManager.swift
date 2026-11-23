@@ -120,7 +120,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         } else {
             let symbolName = "timer"
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-            let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "AutoTimer")?
+            let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "It's Time")?
                 .withSymbolConfiguration(config)
             image?.isTemplate = true
             button.image = image
@@ -205,7 +205,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     
     // MARK: - 构建右键快捷菜单
     private func buildContextMenu() -> NSMenu {
-        let menu = NSMenu(title: "AutoTimerContextMenu")
+        let menu = NSMenu(title: "ItsTimeContextMenu")
         
         // 1. 打开独立主窗口
         let mainWindowItem = NSMenuItem(
@@ -271,10 +271,10 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         launchItem.image = NSImage(systemSymbolName: "power.circle", accessibilityDescription: nil)
         menu.addItem(launchItem)
         
-        // 6. 关于 AutoTimer
+        // 6. 关于 It's Time
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let aboutItem = NSMenuItem(
-            title: "关于 AutoTimer (v\(appVersion))",
+            title: "关于 It's Time (v\(appVersion))",
             action: #selector(showAbout),
             keyEquivalent: ""
         )
@@ -284,9 +284,9 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
-        // 7. 退出 AutoTimer
+        // 7. 退出 It's Time
         let quitItem = NSMenuItem(
-            title: "退出 AutoTimer",
+            title: "退出 It's Time",
             action: #selector(quitApp),
             keyEquivalent: "q"
         )
@@ -306,7 +306,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
         NSApplication.shared.orderFrontStandardAboutPanel(
             options: [
-                NSApplication.AboutPanelOptionKey.applicationName: "AutoTimer",
+                NSApplication.AboutPanelOptionKey.applicationName: "It's Time",
                 NSApplication.AboutPanelOptionKey.version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
             ]
         )

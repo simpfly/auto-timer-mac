@@ -40,7 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 }
 
 @main
-struct AutoTimerApp: App {
+struct ItsTimeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {

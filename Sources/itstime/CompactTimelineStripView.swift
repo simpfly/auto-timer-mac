@@ -68,7 +68,7 @@ public struct CompactTimelineStripView: View {
         let now = currentDate
         var list: [TimelineEventItem] = []
         
-        // 1. AutoTimer 内置任务
+        // 1. It's Time 内置任务
         for task in scheduler.tasks where task.isEnabled && !task.isPaused {
             if let nextDate = task.calculateNextTriggerDate(from: now), nextDate >= now {
                 let kind: TimelineEventItem.TimelineKind

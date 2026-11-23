@@ -9,7 +9,7 @@ public final class SleepPreventionService {
     private var isPreventingSleep: Bool = false
     
     /// 开始阻止系统休眠（音频播放或重要倒计时期间）
-    public func startPreventingSleep(reason: String = "AutoTimer 正在执行定时音频播放") {
+    public func startPreventingSleep(reason: String = "It's Time 正在执行定时音频播放") {
         guard !isPreventingSleep else { return }
         
         let success = IOPMAssertionCreateWithName(

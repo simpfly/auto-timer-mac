@@ -219,13 +219,13 @@ public final class EventKitService: ObservableObject {
         }
     }
     
-    /// 将 AutoTimer 定时任务同步到系统日历
+    /// 将 It's Time 定时任务同步到系统日历
     public func exportToCalendar(task: ScheduleTask) -> Bool {
         guard isCalendarAuthorized else { return false }
         guard let targetDate = task.calculateNextTriggerDate() else { return false }
         
         let event = EKEvent(eventStore: eventStore)
-        event.title = "【AutoTimer】\(task.name)"
+        event.title = "【It's Time】\(task.name)"
         event.startDate = targetDate
         event.endDate = targetDate.addingTimeInterval(1800) // 默认 30 分钟
         event.calendar = eventStore.defaultCalendarForNewEvents
@@ -243,13 +243,13 @@ public final class EventKitService: ObservableObject {
         }
     }
     
-    /// 将 AutoTimer 定时任务同步到系统提醒事项
+    /// 将 It's Time 定时任务同步到系统提醒事项
     public func exportToReminders(task: ScheduleTask) -> Bool {
         guard isRemindersAuthorized else { return false }
         guard let targetDate = task.calculateNextTriggerDate() else { return false }
         
         let reminder = EKReminder(eventStore: eventStore)
-        reminder.title = "【AutoTimer】\(task.name)"
+        reminder.title = "【It's Time】\(task.name)"
         reminder.calendar = eventStore.defaultCalendarForNewReminders()
         reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: targetDate)
         

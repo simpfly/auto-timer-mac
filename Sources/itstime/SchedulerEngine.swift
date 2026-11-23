@@ -7,7 +7,8 @@ import UserNotifications
 public final class SchedulerEngine: ObservableObject {
     public static let shared = SchedulerEngine()
     
-    private let tasksStorageKey = "AutoTimerMac_Tasks_Storage_Key"
+    private let tasksStorageKey = "ItsTime_Tasks_Storage_Key"
+    private let legacyTasksStorageKey = "AutoTimerMac_Tasks_Storage_Key"
     
     @Published public var tasks: [ScheduleTask] = [] {
         didSet {
@@ -135,7 +136,8 @@ public final class SchedulerEngine: ObservableObject {
     
     private func loadTasks() {
         var loaded: [ScheduleTask] = []
-        if let data = UserDefaults.standard.data(forKey: tasksStorageKey),
+        let taskData = UserDefaults.standard.data(forKey: tasksStorageKey) ?? UserDefaults.standard.data(forKey: legacyTasksStorageKey)
+        if let data = taskData,
            let decoded = try? JSONDecoder().decode([ScheduleTask].self, from: data) {
             loaded = decoded
         }

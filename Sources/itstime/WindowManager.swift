@@ -29,7 +29,7 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             defer: false
         )
         newWindow.center()
-        newWindow.title = "AutoTimer"
+        newWindow.title = "It's Time"
         newWindow.titlebarAppearsTransparent = true
         newWindow.titleVisibility = .hidden // 沉浸式透明标题栏，界面更具原生 Glass 美感
         newWindow.isOpaque = false
