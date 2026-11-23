@@ -90,8 +90,8 @@ open "It's Time.app"
 #### 方式二：从源码一键构建
 克隆代码并在项目根目录运行自带的打包脚本：
 ```bash
-git clone https://github.com/simpfly/auto-timer-mac.git
-cd auto-timer-mac
+git clone https://github.com/simpfly/its-time-mac.git
+cd its-time-mac
 chmod +x build_app.sh
 ./build_app.sh
 ```
@@ -102,7 +102,7 @@ chmod +x build_app.sh
 ## 📂 项目结构
 
 ```text
-auto-timer-mac/
+its-time-mac/
 ├── Sources/
 │   └── itstime/
 │       ├── ItsTimeApp.swift              # 应用主生命周期入口
