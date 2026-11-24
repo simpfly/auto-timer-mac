@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>It's Time - 定时播放，不被忽略 | macOS 原生极简定时助手</title>
+  <meta name="description" content="专为打破久坐打造的 macOS 定时助手。到了时间，自动播放八段锦或眼保健操。">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --card-bg: #fbfbfd;
+      --border: rgba(0, 0, 0, 0.06);
+      --border-hover: rgba(0, 0, 0, 0.14);
+      --text-main: #1d1d1f;
+      --text-sub: #86868b;
+      --nav-glass: rgba(255, 255, 255, 0.82);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+    }
+
+    /* 顶部导航 */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      background: var(--nav-glass);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-container {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 24px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-main);
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .brand img {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .nav-actions a {
+      color: var(--text-sub);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .nav-actions a:hover {
+      color: var(--text-main);
+    }
+
+    .btn-nav {
+      background: var(--text-main);
+      color: #ffffff !important;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: 980px;
+      transition: opacity 0.2s;
+    }
+
+    .btn-nav:hover {
+      opacity: 0.85;
+    }
+
+    /* 容器 */
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* 按钮 */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #000000;
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 500;
+      padding: 13px 28px;
+      border-radius: 980px;
+      transition: opacity 0.2s;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.85;
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.04);
+      color: var(--text-main);
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 500;
+      padding: 13px 26px;
+      border-radius: 980px;
+      transition: background 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    /* Hero */
+    .hero {
+      padding-top: 136px;
+      padding-bottom: 70px;
+      text-align: center;
+    }
+
+    /* It's Time to [轮播事项] */
+    .ticker-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: clamp(16px, 2.5vw, 22px);
+      font-weight: 500;
+      color: var(--text-sub);
+      margin-bottom: 14px;
+      letter-spacing: -0.01em;
+    }
+
+    .ticker-target {
+      color: var(--text-main);
+      font-weight: 600;
+      border-bottom: 2px solid var(--text-main);
+      padding-bottom: 2px;
+      display: inline-block;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .ticker-target.fade-out {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+
+    .ticker-target.fade-in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .hero-title {
+      font-size: clamp(38px, 6.5vw, 70px);
+      font-weight: 700;
+      letter-spacing: -0.035em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+      color: var(--text-main);
+    }
+
+    .hero-subtitle {
+      font-size: clamp(16px, 2.2vw, 20px);
+      color: var(--text-sub);
+      max-width: 580px;
+      margin: 0 auto 36px;
+      line-height: 1.55;
+      font-weight: 400;
+    }
+
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 64px;
+    }
+
+    /* 样机展示区 */
+    .mockup-container {
+      max-width: 1040px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .mockup-container img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* 三个极简卡片 */
+    .features {
+      padding: 90px 0;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      transition: border-color 0.2s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--border-hover);
+    }
+
+    .feature-title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      color: var(--text-main);
+    }
+
+    .feature-desc {
+      font-size: 15px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+
+    /* 极简页脚 */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 20px;
+    }
+
+    .footer-links a {
+      color: var(--text-sub);
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      color: var(--text-main);
+    }
+
+    @media (max-width: 768px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+      .hero {
+        padding-top: 100px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ticker-target {
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部极简毛玻璃导航 -->
+  <header>
+    <div class="nav-container">
+      <a href="#" class="brand">
+        <img src="assets/icon.png" alt="It's Time 图标">
+        <span>It's Time</span>
+      </a>
+      <div class="nav-actions">
+        <a href="https://github.com/simpfly/its-time-mac" target="_blank">GitHub</a>
+        <a href="https://github.com/simpfly/its-time-mac/releases" class="btn-nav">免费下载</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero 核心展示 -->
+    <section class="hero container">
+      <!-- It's Time to [事项轮播] -->
+      <div class="ticker-bar">
+        <span>It's Time to</span>
+        <span id="tickerItem" class="ticker-target">做眼保健操</span>
+      </div>
+
+      <h1 class="hero-title">
+        定时播放，不被忽略。
+      </h1>
+
+      <p class="hero-subtitle">
+        到了时间，自动播放八段锦或眼保健操。
+      </p>
+
+      <div class="hero-actions">
+        <a href="https://github.com/simpfly/its-time-mac/releases" class="btn-primary">
+          下载 macOS 版
+        </a>
+        <a href="https://github.com/simpfly/its-time-mac" target="_blank" class="btn-secondary">
+          查看源码
+        </a>
+      </div>
+
+      <!-- 硬件样机外壳实机展示 -->
+      <div class="mockup-container">
+        <img src="assets/screenshots/hero-preview.jpg?v=3" alt="It's Time 实机界面展示">
+      </div>
+    </section>
+
+    <!-- 三个核心功能卡片 -->
+    <section class="features container">
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3 class="feature-title">定时播放</h3>
+          <p class="feature-desc">
+            支持固定时间、循环间隔与倒计时，到点自动播放音频。
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <h3 class="feature-title">提前提示</h3>
+          <p class="feature-desc">
+            播放前 3 秒在菜单栏提示，可随时跳过。
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <h3 class="feature-title">空闲防休眠，锁屏不打扰</h3>
+          <p class="feature-desc">
+            播放时防止电脑空闲休眠；锁屏状态下不播放。
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 极简页脚 -->
+  <footer>
+    <div class="container footer-content">
+      <div>
+        It's Time · 适用于 macOS 13+ · 基于 MIT 协议开源
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/simpfly/its-time-mac" target="_blank">GitHub 仓库</a>
+        <a href="https://github.com/simpfly/its-time-mac/releases" target="_blank">Releases</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // 轮播事项列表（已按指令剔除例会，仅保留核心健康/专注事项）
+    const tasks = [
+      '做眼保健操',
+      '练八段锦',
+      '喝杯水',
+      '站起来活动'
+    ];
+    let currentIndex = 0;
+    const tickerEl = document.getElementById('tickerItem');
+
+    function rotateTask() {
+      if (!tickerEl) return;
+      tickerEl.classList.remove('fade-in');
+      tickerEl.classList.add('fade-out');
+
+      setTimeout(() => {
+        currentIndex = (currentIndex + 1) % tasks.length;
+        tickerEl.textContent = tasks[currentIndex];
+        tickerEl.classList.remove('fade-out');
+        tickerEl.classList.add('fade-in');
+      }, 200);
+    }
+
+    // 每 2.8 秒平滑切换一次
+    setInterval(rotateTask, 2800);
+  </script>
+</body>
+</html>

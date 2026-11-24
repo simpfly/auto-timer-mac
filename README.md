@@ -14,10 +14,9 @@
 
 <br/>
 
-<p align="center">
-  <img src="assets/screenshots/macbook-mockup.png" width="60%" alt="MacBook 样机展示" style="vertical-align: middle; margin-right: 2%;" />
-  <img src="assets/screenshots/app-card-detail.png" width="28%" alt="主控制台近景" style="vertical-align: middle;" />
-</p>
+<div align="center">
+  <img src="assets/screenshots/hero-preview.jpg" width="85%" alt="It's Time 界面预览" />
+</div>
 
 </div>
 
