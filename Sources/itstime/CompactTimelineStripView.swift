@@ -217,13 +217,12 @@ public struct CompactTimelineStripView: View {
         guard count > 0 else { return [] }
         
         let now = currentDate
-        let minRatio: CGFloat = 0.20
-        let maxRatio: CGFloat = 0.95
-        let span = maxRatio - minRatio
-        
-        var ratios: [CGFloat] = []
         
         if mode == .upcoming {
+            let minRatio: CGFloat = 0.20
+            let maxRatio: CGFloat = 0.95
+            let span = maxRatio - minRatio
+            
             let deltas = events.map { max(10, $0.date.timeIntervalSince(now)) }
             guard let maxDelta = deltas.last else { return [] }
             
@@ -231,41 +230,63 @@ public struct CompactTimelineStripView: View {
                 return [0.60]
             }
             
-            ratios = deltas.map { delta in
+            var ratios = deltas.map { delta in
                 let frac = CGFloat(delta / maxDelta)
                 return minRatio + frac * span
             }
-        } else {
-            // 过去事件：事件按时间由早到晚升序排列
-            if count == 1 {
-                return [0.55]
+            
+            // 最小防重叠间距保护
+            let minGap = max(0.12, 32.0 / max(50, trackWidth))
+            for i in 1..<count {
+                if ratios[i] - ratios[i - 1] < minGap {
+                    ratios[i] = ratios[i - 1] + minGap
+                }
             }
+            
+            if let last = ratios.last, last > 1.0 {
+                let overflow = last - 1.0
+                for i in 0..<count {
+                    ratios[i] = max(minRatio, ratios[i] - overflow)
+                }
+            }
+            
+            return ratios
+        } else {
+            // 过去事件：事件在前，现在的时间在最后（右侧）
+            let minRatio: CGFloat = 0.08
+            let maxRatio: CGFloat = 0.78
+            let span = maxRatio - minRatio
+            
+            if count == 1 {
+                return [0.45]
+            }
+            
             let firstDate = events.first!.date
-            let totalSpan = max(60, events.last!.date.timeIntervalSince(firstDate))
-            ratios = events.map { ev in
+            let totalSpan = max(60, now.timeIntervalSince(firstDate))
+            var ratios: [CGFloat] = events.map { ev in
                 let delta = max(0, ev.date.timeIntervalSince(firstDate))
                 let frac = CGFloat(delta / totalSpan)
                 return minRatio + frac * span
             }
-        }
-        
-        // 最小防重叠间距保护（当两个事件距离极其接近时，保证至少 32pt 间距，不重叠）
-        let minGap = max(0.12, 32.0 / max(50, trackWidth))
-        for i in 1..<count {
-            if ratios[i] - ratios[i - 1] < minGap {
-                ratios[i] = ratios[i - 1] + minGap
+            
+            // 最小防重叠间距保护（至少 32pt 间距，不重叠）
+            let minGap = max(0.12, 32.0 / max(50, trackWidth))
+            for i in 1..<count {
+                if ratios[i] - ratios[i - 1] < minGap {
+                    ratios[i] = ratios[i - 1] + minGap
+                }
             }
-        }
-        
-        // 整体右边界保护（避免溢出）
-        if let last = ratios.last, last > 1.0 {
-            let overflow = last - 1.0
-            for i in 0..<count {
-                ratios[i] = max(minRatio, ratios[i] - overflow)
+            
+            // 确保右边界不超过 maxRatio，给右侧“现在的时间”预留充足空间
+            if let last = ratios.last, last > maxRatio {
+                let overflow = last - maxRatio
+                for i in 0..<count {
+                    ratios[i] = max(minRatio, ratios[i] - overflow)
+                }
             }
+            
+            return ratios
         }
-        
-        return ratios
     }
     
     // 当前时间格式化（HH:mm）
@@ -324,6 +345,7 @@ public struct CompactTimelineStripView: View {
             
             let events = displayedEvents
             let ratios = computeRatios(for: events, trackWidth: trackW)
+            let nowX = mode == .past ? (padL + trackW) : padL
             
             ZStack(alignment: .topLeading) {
                 // 1. 底层微浅导轨线
@@ -333,31 +355,32 @@ public struct CompactTimelineStripView: View {
                 }
                 .stroke(Color.primary.opacity(0.12), lineWidth: 1.5)
                 
-                // 2. 当前起点标示（小圆点 + 下方实际时间/状态文本，严格垂直对齐，无偏移）
+                // 2. 当前时间标示（小圆点 + 实际时间：mode == .upcoming 在左端起点，mode == .past 在右端终点）
                 Circle()
-                    .fill(mode == .past ? Color.secondary.opacity(0.4) : Color.accentColor)
+                    .fill(Color.accentColor)
                     .frame(width: 4.5, height: 4.5)
-                    .position(x: padL, y: trackY)
+                    .position(x: nowX, y: trackY)
                 
-                Text(mode == .past ? "已发生" : formattedCurrentTime)
+                Text(formattedCurrentTime)
                     .font(.system(size: 8.5, weight: .medium, design: .rounded))
-                    .foregroundColor(.secondary.opacity(0.75))
+                    .foregroundColor(.secondary.opacity(0.85))
                     .lineLimit(1)
                     .fixedSize()
-                    .position(x: padL, y: textY)
+                    .position(x: nowX, y: textY)
                 
                 // 3. 动态非等比事件节点与时间标注
                 if events.isEmpty {
                     Text(mode == .past ? "暂无已触发事件" : "暂无待办")
                         .font(.system(size: 9, weight: .regular))
                         .foregroundColor(.secondary.opacity(0.45))
-                        .position(x: padL + trackW * 0.5, y: textY)
+                        .position(x: padL + trackW * (mode == .past ? 0.40 : 0.5), y: textY)
                 } else {
                     ForEach(Array(events.enumerated()), id: \.element.id) { index, item in
                         let r = (index < ratios.count) ? ratios[index] : 0.5
-                        let x = padL + min(1.0, max(0.15, r)) * trackW
+                        let clampedR = mode == .past ? min(0.80, max(0.06, r)) : min(1.0, max(0.15, r))
+                        let x = padL + clampedR * trackW
                         
-                        // 节点药丸：垂直中心精确落在导轨线 trackY 上（与起点小蓝点完全在同一水平线上）
+                        // 节点药丸：垂直中心精确落在导轨线 trackY 上（与当前时间小蓝点完全在同一水平线上）
                         RoundedRectangle(cornerRadius: 1.5)
                             .fill(item.kind.color)
                             .frame(width: 4.5, height: 8.5)
