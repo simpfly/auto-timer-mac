@@ -368,7 +368,7 @@ struct QuickTaskCreateView: View {
                     
                     // 下拉卡片：处于透明背景上层，紧密咬合按钮底边展开，完全消除悬空缝隙，文字像素级对齐
                     actionKindDropdownList
-                        .offset(y: 26)
+                        .offset(y: 24)
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
                 }
             }
