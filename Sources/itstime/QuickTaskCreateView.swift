@@ -11,8 +11,8 @@ enum TriggerMode: Int, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .daily: return "每天定时"
-        case .interval: return "循环间隔"
+        case .daily: return "定时"
+        case .interval: return "循环"
         case .countdown: return "倒计时"
         }
     }
@@ -366,9 +366,9 @@ struct QuickTaskCreateView: View {
                             }
                         }
                     
-                    // 下拉卡片：整卡直接覆盖上方按钮，四周拥有完整独立阴影，与 macOS 原生 Pop-up 菜单行为一致
+                    // 下拉卡片：处于透明背景上层，紧密咬合按钮底边展开，完全消除悬空缝隙，文字像素级对齐
                     actionKindDropdownList
-                        .offset(y: 0)
+                        .offset(y: 24)
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
                 }
             }
@@ -820,7 +820,7 @@ struct QuickTaskCreateView: View {
                         Picker("", selection: $selectedAudioName) {
                             Text("眼保健操").tag("眼保健操")
                             Text("八段锦口令").tag("八段锦口令")
-                            Text("自定义本地文件...").tag("自定义")
+                            Text("自定义...").tag("自定义")
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
@@ -871,7 +871,7 @@ struct QuickTaskCreateView: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(.red)
-                            Text("⚠️ 自定义音频文件丢失或已被移除")
+                            Text("⚠️ 音频文件已丢失")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.red)
                             
@@ -898,7 +898,7 @@ struct QuickTaskCreateView: View {
                         .font(.system(size: 11))
                         .foregroundColor(.blue)
                     
-                    TextField("输入到期自动打开的网页链接", text: $targetURLString)
+                    TextField("https:// 网址", text: $targetURLString)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                 }
@@ -911,21 +911,6 @@ struct QuickTaskCreateView: View {
     // MARK: - 联想建议列表
     private var suggestionResultsView: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text("系统日历与提醒联想")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.secondary)
-                Spacer()
-                Button(action: { isShowingSuggestions = false }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 6)
-            .padding(.top, 3)
-            
             ForEach(searchResults) { item in
                 Button(action: {
                     taskTitle = item.title
@@ -946,7 +931,7 @@ struct QuickTaskCreateView: View {
                             mode: .daily(hour: h, minute: m),
                             cleanedTitle: item.title,
                             matchedText: timeStr,
-                            summaryText: "已匹配日程时间：\(timeStr)"
+                            summaryText: timeStr
                         )
                     }
                     
@@ -973,24 +958,16 @@ struct QuickTaskCreateView: View {
                         }
                         
                         Spacer()
-                        
-                        Text("填入")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.accentColor)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.accentColor.opacity(0.12))
-                            .clipShape(Capsule())
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
                     .background(Color.primary.opacity(0.03))
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(6)
+        .padding(5)
         .background(Color(NSColor.controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
@@ -1016,11 +993,11 @@ struct QuickTaskCreateView: View {
         }
         switch selectedMode {
         case .countdown:
-            return "\(formatDurationString(minutes: countdownMinutes, seconds: countdownSeconds))后提醒我"
+            return formatDurationString(minutes: countdownMinutes, seconds: countdownSeconds)
         case .daily:
-            return "\(formattedDailyTime)提醒我"
+            return formattedDailyTime
         case .interval:
-            return "每\(formatDurationString(minutes: intervalMinutes, seconds: intervalSeconds))提醒我"
+            return "每\(formatDurationString(minutes: intervalMinutes, seconds: intervalSeconds))"
         }
     }
     
@@ -1189,11 +1166,11 @@ struct QuickTaskCreateView: View {
         } else {
             switch selectedMode {
             case .countdown:
-                finalName = "倒计时 \(formatDurationString(minutes: countdownMinutes, seconds: countdownSeconds))"
+                finalName = formatDurationString(minutes: countdownMinutes, seconds: countdownSeconds)
             case .daily:
-                finalName = "每日提醒 \(dailyTimeString)"
+                finalName = dailyTimeString
             case .interval:
-                finalName = "循环 \(formatDurationString(minutes: intervalMinutes, seconds: intervalSeconds))"
+                finalName = "每\(formatDurationString(minutes: intervalMinutes, seconds: intervalSeconds))"
             }
         }
         
@@ -1325,15 +1302,12 @@ struct QuickTaskCreateView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.accentColor)
-            Text("自动识别：")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
             Text(parsed.summaryText)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.accentColor)
             if !parsed.cleanedTitle.isEmpty {
-                Text("· 任务名「\(parsed.cleanedTitle)」")
-                    .font(.system(size: 10.5))
+                Text("· \(parsed.cleanedTitle)")
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }
@@ -1369,7 +1343,7 @@ struct QuickTaskCreateView: View {
                 mode: .daily(hour: h, minute: m),
                 cleanedTitle: draft.title,
                 matchedText: timeStr,
-                summaryText: "已预设时间：\(timeStr)"
+                summaryText: timeStr
             )
         } else if let minutes = draft.suggestedCountdownMinutes {
             selectedMode = .countdown
@@ -1380,7 +1354,7 @@ struct QuickTaskCreateView: View {
                 mode: .countdown(minutes: minutes, seconds: 0),
                 cleanedTitle: draft.title,
                 matchedText: "\(minutes)分钟",
-                summaryText: "已设为 \(minutes) 分钟专注"
+                summaryText: "\(minutes)分钟"
             )
         }
         

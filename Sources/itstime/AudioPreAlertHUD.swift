@@ -18,7 +18,7 @@ public final class AudioPreAlertHUD: ObservableObject {
     
     public init() {}
     
-    /// 更新或展示倒计时预告（3s, 2s, 1s），初次出现时轻微弹动入场
+    /// 展示或更新倒计时预告弹窗卡片（复用文本通知规范：居中于状态栏下方）
     public func update(alert: AudioPreAlertInfo) {
         self.currentAlert = alert
         
@@ -28,42 +28,54 @@ public final class AudioPreAlertHUD: ObservableObject {
         
         guard let window = alertWindow else { return }
         
-        // 目标定位：精准贴合在屏幕顶栏右侧菜单栏下方（安全边距 16pt，离顶 10pt）
-        let screen = NSScreen.main ?? NSScreen.screens[0]
-        let screenRect = screen.visibleFrame
-        let targetX = screenRect.maxX - window.frame.width - 16
-        let targetY = screenRect.maxY - window.frame.height - 10
-        let targetFrame = NSRect(x: targetX, y: targetY, width: window.frame.width, height: window.frame.height)
-        
         if !window.isVisible {
-            // 起始位置：轻度上浮 8pt
-            let initialFrame = NSRect(x: targetX, y: targetY + 8, width: window.frame.width, height: window.frame.height)
-            // 过冲位置：微弹过冲 2pt
-            let overshootFrame = NSRect(x: targetX, y: targetY - 2, width: window.frame.width, height: window.frame.height)
-            
+            // 首次展示：计算一次 frame，之后固定不再重算，避免每 tick setFrame 引起位移
+            let targetFrame = calculateTargetFrame(window: window)
+            let initialFrame = NSRect(
+                x: targetFrame.origin.x,
+                y: targetFrame.origin.y + 4,
+                width: targetFrame.width,
+                height: targetFrame.height
+            )
             window.setFrame(initialFrame, display: false)
             window.alphaValue = 0.0
             window.orderFrontRegardless()
             
-            // 阶段 1：快速滑落至过冲位置并淡入 (0.18s)
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.18
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.16
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 window.animator().alphaValue = 1.0
-                window.animator().setFrame(overshootFrame, display: true)
-            }, completionHandler: {
-                // 阶段 2：轻柔回弹归位至目标位置 (0.10s)
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.10
-                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                    window.animator().setFrame(targetFrame, display: true)
-                }
-            })
+                window.animator().setFrame(targetFrame, display: true)
+            }
         }
-        // 如果窗口已经可见（3s -> 2s -> 1s 倒计时进行中），仅静默更新内容，绝不重新触发布局位移引起抖动
+        // 已展示时仅更新数据（currentAlert 已改），SwiftUI 自动重绘倒计时数字，窗口位置不动
     }
     
-    /// 倒计时结束或跳过时关闭气泡（轻微上收淡出）
+    /// 计算定位：精准水平居中于状态栏图标正下方（与文本通知卡片绝对对齐）
+    private func calculateTargetFrame(window: NSPanel) -> NSRect {
+        let cardWidth: CGFloat = 290
+        let cardHeight: CGFloat = 148   // 固定高度，消除每 tick 重布局导致的位移抖动
+        
+        let screen = StatusItemManager.shared.button?.window?.screen ?? NSScreen.main ?? NSScreen.screens[0]
+        let screenRect = screen.visibleFrame
+        
+        var targetX: CGFloat
+        if let statusButton = StatusItemManager.shared.button,
+           let btnWindow = statusButton.window {
+            let buttonRectInWindow = statusButton.convert(statusButton.bounds, to: nil)
+            let buttonRectOnScreen = btnWindow.convertToScreen(buttonRectInWindow)
+            targetX = buttonRectOnScreen.midX - cardWidth / 2
+        } else {
+            targetX = screenRect.maxX - cardWidth - 16
+        }
+        
+        targetX = max(screenRect.minX + 16, min(targetX, screenRect.maxX - cardWidth - 16))
+        let finalY = screenRect.maxY - cardHeight - 8
+        
+        return NSRect(x: targetX, y: finalY, width: cardWidth, height: cardHeight)
+    }
+    
+    /// 倒计时结束或用户点击关闭时收起卡片
     public func dismiss() {
         self.currentAlert = nil
         guard let window = alertWindow, window.isVisible else { return }
@@ -86,102 +98,141 @@ public final class AudioPreAlertHUD: ObservableObject {
     }
     
     private func createAlertWindow() {
-        let hosting = NSHostingController(rootView: AudioPreAlertBubbleView())
+        let hosting = NSHostingController(rootView: AudioPreAlertCardView())
         
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 310, height: 86),
+            contentRect: NSRect(x: 0, y: 0, width: 290, height: 130),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         panel.isFloatingPanel = true
-        panel.level = .statusBar // 浮动在状态栏级别，极显眼且不抢焦点
+        panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
+        panel.isMovableByWindowBackground = true
         panel.contentViewController = hosting
         
         self.alertWindow = panel
     }
 }
 
-// MARK: - 菜单栏下方预告气泡视图
-struct AudioPreAlertBubbleView: View {
+// MARK: - 音频预告弹窗卡片视图（复用文本通知 UI 规范）
+struct AudioPreAlertCardView: View {
     @ObservedObject var hud = AudioPreAlertHUD.shared
     
     var body: some View {
         if let alert = hud.currentAlert {
-            HStack(spacing: 12) {
-                // 左侧倒计时胶囊徽章（3, 2, 1 递减）
-                ZStack {
-                    Circle()
-                        .fill(Color.orange.opacity(0.18))
-                        .frame(width: 40, height: 40)
-                    
-                    Circle()
-                        .stroke(Color.orange, lineWidth: 2.2)
-                        .frame(width: 38, height: 38)
-                    
-                    Text("\(alert.secondsRemaining)s")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(.orange)
-                        .monospacedDigit()
+            VStack(spacing: 12) {
+                // 顶排靠左：与主程序一致的品牌图标 + It's Time
+                HStack {
+                    BrandTitleView()
+                        .fixedSize()
+                    Spacer()
+                    // 右上角：圆环倒计时
+                    CountdownRingView(secondsRemaining: alert.secondsRemaining, total: 5)
                 }
                 
-                // 中间信息
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "bell.badge.waveform.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.orange)
-                        Text("即将播放音频")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.primary)
-                    }
-                    
+                // 中排：事项标题与即将播放提示
+                VStack(spacing: 4) {
                     Text(alert.taskName)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.primary.opacity(0.9))
-                        .lineLimit(1)
+                        .font(.system(size: alert.taskName.count > 20 ? 15 : 17, weight: .medium))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity)
+                        .fixedSize(horizontal: false, vertical: true)
                     
-                    if !alert.audioName.isEmpty {
-                        Text(alert.audioName)
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // 右侧：跳过按钮
-                Button(action: {
-                    SchedulerEngine.shared.skipAudioPreAlert()
-                }) {
-                    Text("跳过")
-                        .font(.system(size: 11, weight: .medium))
+                    let audioTitle = alert.audioName.isEmpty ? "本地音频" : alert.audioName
+                    Text("即将播放: \(audioTitle)")
+                        .font(.system(size: 11, weight: .regular))
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(Color.secondary.opacity(0.14))
-                        .clipShape(Capsule())
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help("取消本次音频播放")
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 2)
+                
+                // 底部操作区：醒目的【不播放】与【立即播放】
+                HStack(spacing: 12) {
+                    Button(action: {
+                        SchedulerEngine.shared.skipAudioPreAlert()
+                    }) {
+                        Text("不播放")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(Color.secondary.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
+                    
+                    Button(action: {
+                        SchedulerEngine.shared.playAudioImmediatelyFromPreAlert()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 9))
+                            Text("立即播放")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 6)
+                        .background(Color.orange)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(14)
+            .frame(width: 290, height: 148)
             .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.orange.opacity(0.35), lineWidth: 1.2)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.orange.opacity(0.25), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.16), radius: 14, x: 0, y: 8)
-            .frame(width: 310, height: 86)
-            .disableFocusEffect()
         } else {
             EmptyView()
         }
+    }
+}
+
+// MARK: - 圆环倒计时组件
+struct CountdownRingView: View {
+    let secondsRemaining: Int
+    let total: Int
+
+    private var progress: Double {
+        guard total > 0 else { return 0 }
+        return Double(secondsRemaining) / Double(total)
+    }
+
+    var body: some View {
+        ZStack {
+            // 底层轨道
+            Circle()
+                .stroke(Color.orange.opacity(0.15), lineWidth: 3)
+
+            // 进度弧（从顶部顺时针缩短）
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(Color.orange, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 0.9), value: progress)
+
+            // 中心秒数
+            Text("\(secondsRemaining)")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(.orange)
+        }
+        .frame(width: 30, height: 30)
     }
 }

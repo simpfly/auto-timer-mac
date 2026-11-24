@@ -75,6 +75,12 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         calendarSyncWindow?.orderOut(nil)
     }
     
+    public func openScreenTimeWindow() {
+        StatusItemManager.shared.closePopover()
+        openMainWindow()
+        NotificationCenter.default.post(name: NSNotification.Name("ItsTime_ShowScreenTimePage"), object: nil)
+    }
+    
     // NSWindowDelegate: 拦截窗口关闭，仅隐藏窗口，保留菜单栏继续后台执行
     public func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil)

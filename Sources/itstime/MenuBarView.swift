@@ -6,11 +6,18 @@ struct MenuBarView: View {
     @ObservedObject var scheduler = SchedulerEngine.shared
     @ObservedObject var audioService = AudioService.shared
     @ObservedObject var launchManager = LaunchAtLoginManager.shared
+    @ObservedObject var screenTime = ScreenTimeTrackerService.shared
     
     @State private var showingEditor: Bool = false
     @State private var showingCalendarSync: Bool = false
     @State private var editingTask: ScheduleTask? = nil
     @State private var syncToastMessage: String? = nil
+    @State private var currentPage: MenuBarPage = .tasks
+    
+    enum MenuBarPage {
+        case tasks
+        case screenTime
+    }
     
     // 正在专注（活跃的倒计时任务）
     private var activeCountdownTasks: [ScheduleTask] {
@@ -43,47 +50,91 @@ struct MenuBarView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            VStack(spacing: 0) {
-                // 1. 顶栏：极简通透
-                headerBar
-                    .padding(.horizontal, 16)
-                    .padding(.top, 14)
-                    .padding(.bottom, 10)
-                
-                Divider()
-                    .opacity(0.25)
-                
-                // 2. 主区域（三级明确视觉层次）
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Section 1: 快捷创建面板（提醒类型选择器替代静态标题，与时间流动轴同行）
-                        QuickTaskCreateView(editingTask: $editingTask, timelineWidth: 200)
-                        
-                        // Section 2: 倒计时特写看板 (若存在进行中的倒计时)
-                        if !activeCountdownTasks.isEmpty {
-                            SectionHeaderView(icon: "timer", title: "倒计时", count: activeCountdownTasks.count, accentColor: .orange)
-                            LazyVStack(spacing: 10) {
-                                ForEach(activeCountdownTasks) { task in
-                                    taskCard(task, isSpotlight: true)
+            if currentPage == .screenTime {
+                ScreenTimeView(onDismiss: {
+                    currentPage = .tasks
+                })
+                .transition(.opacity)
+            } else {
+                VStack(spacing: 0) {
+                    // 1. 顶栏：极简通透
+                    headerBar
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                        .padding(.bottom, 10)
+                    
+                    Divider()
+                        .opacity(0.25)
+                    
+                    // 2. 主区域（三级明确视觉层次）
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Section 1: 快捷创建面板（提醒类型选择器替代静态标题，与时间流动轴同行）
+                            QuickTaskCreateView(editingTask: $editingTask, timelineWidth: 200)
+                            
+                            // Section 2: 倒计时特写看板 (若存在进行中的倒计时)
+                            if !activeCountdownTasks.isEmpty {
+                                SectionHeaderView(icon: "timer", title: "倒计时", count: activeCountdownTasks.count, accentColor: .orange)
+                                LazyVStack(spacing: 10) {
+                                    ForEach(activeCountdownTasks) { task in
+                                        taskCard(task, isSpotlight: true)
+                                    }
                                 }
                             }
-                        }
-                        
-                        // Section 3: 计划任务列表
-                        if !regularPlannedTasks.isEmpty {
-                            SectionHeaderView(icon: "list.bullet.rectangle", title: "计划任务", count: regularPlannedTasks.count, accentColor: .secondary)
-                            LazyVStack(spacing: 8) {
-                                ForEach(regularPlannedTasks) { task in
-                                    taskCard(task, isSpotlight: false)
+                            
+                            // Section 3: 计划任务列表
+                            if !regularPlannedTasks.isEmpty {
+                                SectionHeaderView(icon: "list.bullet.rectangle", title: "计划", count: regularPlannedTasks.count, accentColor: .secondary)
+                                LazyVStack(spacing: 8) {
+                                    ForEach(regularPlannedTasks) { task in
+                                        taskCard(task, isSpotlight: false)
+                                    }
                                 }
+                            } else if activeCountdownTasks.isEmpty && scheduler.tasks.isEmpty {
+                                emptyStateView
                             }
-                        } else if activeCountdownTasks.isEmpty && scheduler.tasks.isEmpty {
-                            emptyStateView
+                            
+                            // Section 4: 屏幕时间与事件概览 (点击在原有面板内直接切换)
+                            Button {
+                                currentPage = .screenTime
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "hourglass")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                    Text(screenTime.formattedTodayDuration)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                    
+                                    if screenTime.todayTotalEventTriggerCount > 0 {
+                                        Text("•")
+                                            .foregroundColor(.secondary.opacity(0.5))
+                                            .font(.system(size: 9))
+                                        Text("\(screenTime.todayTotalEventTriggerCount)次")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.orange)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.secondary.opacity(0.6))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.35))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .help("查看屏幕时间与统计")
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.top, 8)
+                        .padding(.bottom, 18)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 8)
-                    .padding(.bottom, 18)
                 }
             }
             
@@ -145,6 +196,12 @@ struct MenuBarView: View {
                     WindowManager.shared.openMainWindow()
                 } label: {
                     Label("打开主窗口", systemImage: "macwindow")
+                }
+                
+                Button {
+                    currentPage = .screenTime
+                } label: {
+                    Label("屏幕时间与事件统计", systemImage: "hourglass")
                 }
                 
                 Button {

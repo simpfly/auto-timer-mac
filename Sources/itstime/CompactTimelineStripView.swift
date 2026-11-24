@@ -19,10 +19,10 @@ public struct TimelineEventItem: Identifiable {
         public var title: String {
             switch self {
             case .countdown: return "倒计时"
-            case .daily: return "每日定时"
-            case .interval: return "循环提醒"
-            case .once: return "单次提醒"
-            case .calendar: return "系统日程"
+            case .daily: return "定时"
+            case .interval: return "循环"
+            case .once: return "单次"
+            case .calendar: return "日程"
             }
         }
         
@@ -285,6 +285,10 @@ public struct CompactTimelineStripView: View {
             }
         }
         .frame(height: 25)
+        .onAppear {
+            // 每次 Popover 展开时立即对齐真实当前时间，避免显示陈旧时刻
+            currentDate = Date()
+        }
         .onReceive(timer) { input in
             currentDate = input
         }

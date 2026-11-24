@@ -67,7 +67,7 @@ struct CalendarSyncSheet: View {
             Text("访问日历与提醒事项")
                 .font(.system(size: 16, weight: .semibold))
             
-            Text("读取今日日程与待办，快速转为定时；到点可打开会议链接或弹窗提醒。")
+            Text("同步今日日程与待办为定时提醒。")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -89,8 +89,8 @@ struct CalendarSyncSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Picker("", selection: $selectedTab) {
-                    Text("日历日程 (\(eventKit.todayCalendarEvents.count))").tag(0)
-                    Text("提醒事项 (\(eventKit.todayReminders.count))").tag(1)
+                    Text("日历 (\(eventKit.todayCalendarEvents.count))").tag(0)
+                    Text("提醒 (\(eventKit.todayReminders.count))").tag(1)
                 }
                 .pickerStyle(.segmented)
                 
@@ -102,7 +102,7 @@ struct CalendarSyncSheet: View {
                         HStack(spacing: 4) {
                             Image(systemName: "square.and.arrow.down.on.square")
                                 .font(.system(size: 10))
-                            Text("一键导入今日 (\(unimportedEvents.count))")
+                            Text("全部导入 (\(unimportedEvents.count))")
                                 .font(.system(size: 11, weight: .medium))
                         }
                     }
@@ -186,17 +186,13 @@ struct CalendarSyncSheet: View {
                                     .foregroundColor(ev.isPast ? .secondary : (ev.isOngoing ? .blue : .accentColor))
                                 
                                 if ev.url != nil {
-                                    HStack(spacing: 2) {
-                                        Image(systemName: "link")
-                                            .font(.system(size: 9))
-                                        Text("含链接")
-                                            .font(.system(size: 10))
-                                    }
-                                    .foregroundColor(.blue)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(Color.blue.opacity(0.08))
-                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                                    Image(systemName: "link")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.blue)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(Color.blue.opacity(0.08))
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
                                 }
                             }
                         }

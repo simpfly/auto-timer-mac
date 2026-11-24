@@ -71,13 +71,13 @@ public final class NaturalLanguageTimeParser {
         let cleaned = cleanTitle(from: text, matchedRange: match.range)
         let summary: String
         if minutes >= 60 && minutes % 60 == 0 && seconds == 0 {
-            summary = "每 \(minutes / 60) 小时"
+            summary = "每\(minutes / 60)小时"
         } else if minutes > 0 && seconds > 0 {
-            summary = "每 \(minutes)分\(seconds)秒"
+            summary = "每\(minutes)分\(seconds)秒"
         } else if minutes > 0 {
-            summary = "每 \(minutes) 分钟"
+            summary = "每\(minutes)分钟"
         } else {
-            summary = "每 \(seconds) 秒"
+            summary = "每\(seconds)秒"
         }
         
         return ParsedTimeResult(
@@ -215,7 +215,7 @@ public final class NaturalLanguageTimeParser {
                             mode: .daily(hour: hour, minute: minute),
                             cleanedTitle: cleaned,
                             matchedText: fullMatchedString,
-                            summaryText: "每天 \(timeStr)"
+                            summaryText: timeStr
                         )
                     }
                 }
@@ -257,13 +257,13 @@ public final class NaturalLanguageTimeParser {
             let cleaned = cleanTitle(from: text, matchedRange: match.range)
             let summary: String
             if minutes >= 60 && minutes % 60 == 0 && seconds == 0 {
-                summary = "\(minutes / 60)小时 倒计时"
+                summary = "\(minutes / 60)小时"
             } else if minutes > 0 && seconds > 0 {
-                summary = "\(minutes)分\(seconds)秒 倒计时"
+                summary = "\(minutes)分\(seconds)秒"
             } else if minutes > 0 {
-                summary = "\(minutes)分钟 倒计时"
+                summary = "\(minutes)分钟"
             } else {
-                summary = "\(seconds)秒 倒计时"
+                summary = "\(seconds)秒"
             }
             
             return ParsedTimeResult(

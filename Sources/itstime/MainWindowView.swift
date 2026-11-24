@@ -9,6 +9,12 @@ struct MainWindowView: View {
     @State private var showingCalendarSync: Bool = false
     @State private var editingTask: ScheduleTask? = nil
     @State private var syncToastMessage: String? = nil
+    @State private var currentPage: MainWindowPage = .tasks
+    
+    enum MainWindowPage {
+        case tasks
+        case screenTime
+    }
     
     // 正在专注（活跃的倒计时任务）
     private var activeCountdownTasks: [ScheduleTask] {
@@ -45,12 +51,19 @@ struct MainWindowView: View {
             GlassBackgroundView(material: .underWindowBackground, blendingMode: .behindWindow)
                 .ignoresSafeArea()
             
-            VStack(spacing: 0) {
-                // 顶栏：极简通透
-                headerBar
-                
-                // 任务列表主区域（三级明确视觉层次）
-                ScrollView(showsIndicators: false) {
+            if currentPage == .screenTime {
+                ScreenTimeView(onDismiss: {
+                    currentPage = .tasks
+                })
+                .padding(.top, 8)
+                .transition(.opacity)
+            } else {
+                VStack(spacing: 0) {
+                    // 顶栏：极简通透
+                    headerBar
+                    
+                    // 任务列表主区域（三级明确视觉层次）
+                    ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 14) {
                         // 1. 快捷创建面板（提醒类型选择器替代静态标题，与时间流动轴同行）
                         QuickTaskCreateView(editingTask: $editingTask, timelineWidth: 260)
@@ -67,7 +80,7 @@ struct MainWindowView: View {
                         
                         // 3. 计划任务列表
                         if !regularPlannedTasks.isEmpty {
-                            SectionHeaderView(icon: "list.bullet.rectangle", title: "计划任务", count: regularPlannedTasks.count, accentColor: .secondary)
+                            SectionHeaderView(icon: "list.bullet.rectangle", title: "计划", count: regularPlannedTasks.count, accentColor: .secondary)
                             LazyVStack(spacing: 8) {
                                 ForEach(regularPlannedTasks) { task in
                                     taskCard(task, isSpotlight: false)
@@ -80,6 +93,7 @@ struct MainWindowView: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 32)
                 }
+            }
             }
             
             // 轻量 Toast 提示
@@ -115,6 +129,9 @@ struct MainWindowView: View {
             CalendarSyncSheet()
         }
         .disableFocusEffect()
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ItsTime_ShowScreenTimePage"))) { _ in
+            currentPage = .screenTime
+        }
     }
     
     // MARK: - 顶栏 (底层左右锚定 + 中间 HUD 绝对居中层叠，彻底杜绝标题被挤压加宽/弹动)
@@ -133,8 +150,35 @@ struct MainWindowView: View {
             
             Spacer()
             
-            // 右侧：日历与提醒联动入口
+            // 右侧：更多功能菜单与日历联动入口
             HStack(spacing: 10) {
+                Menu {
+                    Button {
+                        currentPage = .screenTime
+                    } label: {
+                        Label("屏幕时间与事件统计", systemImage: "hourglass")
+                    }
+                    
+                    Button {
+                        showingCalendarSync = true
+                    } label: {
+                        Label("日历与提醒事项", systemImage: "calendar.badge.clock")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.primary)
+                        .frame(width: 28, height: 28)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .focusable(false)
+                .help("更多功能")
+                
                 Button(action: {
                     showingCalendarSync = true
                 }) {
@@ -342,14 +386,15 @@ struct TaskCardView: View {
         HStack(alignment: .center, spacing: 14) {
             // 左侧：状态指示 + 任务名称 + 动作
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(task.isPaused ? Color.orange : Color.accentColor)
-                        .frame(width: 7, height: 7)
-                    
-                    Text(task.isPaused ? "已暂停" : "正在倒计时")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(task.isPaused ? .orange : .accentColor)
+                if task.isPaused {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 6, height: 6)
+                        Text("已暂停")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.orange)
+                    }
                 }
                 
                 Text(task.name)
@@ -396,17 +441,12 @@ struct TaskCardView: View {
                 
                 HStack(spacing: 6) {
                     Button(action: onTogglePause) {
-                        HStack(spacing: 3) {
-                            Image(systemName: task.isPaused ? "play.fill" : "pause.fill")
-                                .font(.system(size: 9))
-                            Text(task.isPaused ? "继续" : "暂停")
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .foregroundColor(task.isPaused ? .white : .primary)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(task.isPaused ? Color.orange : Color.primary.opacity(0.08))
-                        .clipShape(Capsule())
+                        Image(systemName: task.isPaused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(task.isPaused ? .white : .primary)
+                            .frame(width: 22, height: 22)
+                            .background(task.isPaused ? Color.orange : Color.primary.opacity(0.08))
+                            .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .help(task.isPaused ? "继续" : "暂停")
@@ -631,7 +671,7 @@ struct TaskCardView: View {
                 HStack(spacing: 3) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 8))
-                    Text("每天")
+                    Text("定时")
                         .font(.system(size: 10, weight: .medium))
                 }
                 .foregroundColor(.indigo)
@@ -677,63 +717,39 @@ struct TaskCardView: View {
                 .lineLimit(1)
                 
         case .daily(let hour, let minute):
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(String(format: "%02d:%02d", hour, minute))
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
-                Text("每天")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-            }
-            .lineLimit(1)
+            Text(String(format: "%02d:%02d", hour, minute))
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
+                .lineLimit(1)
             
         case .interval(let intervalSeconds):
             if intervalSeconds < 60 {
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text("\(intervalSeconds)")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
-                    Text("秒/次")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-                .lineLimit(1)
+                Text("\(intervalSeconds)秒")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
+                    .lineLimit(1)
             } else {
                 let m = intervalSeconds / 60
                 let s = intervalSeconds % 60
                 if s == 0 {
                     if m >= 60 && m % 60 == 0 {
-                        HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            Text("\(m / 60)")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
-                            Text("小时/次")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                        }
-                        .lineLimit(1)
+                        Text("\(m / 60)小时")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
+                            .lineLimit(1)
                     } else {
-                        HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            Text("\(m)")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
-                            Text("分钟/次")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                        }
-                        .lineLimit(1)
+                        Text("\(m)分钟")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
+                            .lineLimit(1)
                     }
                 } else {
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text(String(format: "%02d:%02d", m, s))
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
-                        Text("分秒/次")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
+                    Text(String(format: "%02d:%02d", m, s))
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
+                        .lineLimit(1)
                 }
             }
         }

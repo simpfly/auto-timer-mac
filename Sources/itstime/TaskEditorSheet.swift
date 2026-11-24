@@ -381,8 +381,8 @@ struct TaskEditorSheet: View {
             
             Picker("", selection: $triggerMode) {
                 if case .once = editingTask?.trigger { Text("一次提醒").tag(3) }
-                Text("每天定时").tag(1)
-                Text("循环间隔").tag(2)
+                Text("定时").tag(1)
+                Text("循环").tag(2)
                 Text("倒计时").tag(0)
             }
             .pickerStyle(.segmented)
@@ -1098,15 +1098,12 @@ struct TaskEditorSheet: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.accentColor)
-            Text("自动识别：")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
             Text(parsed.summaryText)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.accentColor)
             if !parsed.cleanedTitle.isEmpty {
-                Text("· 任务名「\(parsed.cleanedTitle)」")
-                    .font(.system(size: 10.5))
+                Text("· \(parsed.cleanedTitle)")
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
             }

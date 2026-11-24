@@ -171,17 +171,13 @@ struct PopupHUDContentView: View {
             
             // 底部操作栏
             HStack {
-                if isTextMode {
-                    Text("定时提醒已到达")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                } else if case .customChecklist = manager.currentMode {
+                if case .customChecklist = manager.currentMode {
                     let completed = manager.checklistItems.filter { $0.isCompleted }.count
-                    Text("已完成 \(completed) / \(manager.checklistItems.count) 项")
-                        .font(.system(size: 12, weight: .medium))
+                    Text("\(completed) / \(manager.checklistItems.count)")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary)
-                } else {
-                    Text("今日日程与待办")
+                } else if case .todaySystemAgenda = manager.currentMode {
+                    Text("今日日程")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
                 }

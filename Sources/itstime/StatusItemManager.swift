@@ -34,6 +34,10 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         popover.animates = false // 禁用动画防止弹窗产生微小位移抖动
         popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: MenuBarView())
+        
+        // 隐藏顶部指示箭头（去除三角尖角），保持边缘平滑纯净
+        popover.setValue(true, forKeyPath: "shouldHideAnchor")
+        
         self.popover = popover
         
         // 绑定状态变化监听，实时更新状态栏图标与文字
@@ -222,6 +226,16 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         calendarItem.image = NSImage(systemSymbolName: "calendar.badge.clock", accessibilityDescription: nil)
         menu.addItem(calendarItem)
         
+        // 3. 屏幕时间与事件统计
+        let screenTimeItem = NSMenuItem(
+            title: "屏幕时间与事件统计",
+            action: #selector(openScreenTime),
+            keyEquivalent: "s"
+        )
+        screenTimeItem.target = self
+        screenTimeItem.image = NSImage(systemSymbolName: "hourglass", accessibilityDescription: nil)
+        menu.addItem(screenTimeItem)
+        
         menu.addItem(NSMenuItem.separator())
         
         // 3. 一键暂停 / 恢复所有任务
@@ -293,6 +307,12 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     }
     
     // MARK: - 菜单 Action 响应
+    @objc private func openScreenTime() {
+        closePopover()
+        WindowManager.shared.openMainWindow()
+        NotificationCenter.default.post(name: NSNotification.Name("ItsTime_ShowScreenTimePage"), object: nil)
+    }
+    
     @objc private func openCalendarSync() {
         closePopover()
         WindowManager.shared.openCalendarSyncWindow()

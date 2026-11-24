@@ -98,6 +98,12 @@ public struct ScheduleTask: Identifiable, Codable, Equatable {
     public var isPaused: Bool
     public var createdAt: Date
     public var lastTriggeredAt: Date?
+    /// 历史累计触发总次数
+    public var triggerCount: Int? = 0
+    
+    public var effectiveTriggerCount: Int {
+        triggerCount ?? 0
+    }
     
     public var countdownRemainingSeconds: Int?
     
@@ -109,7 +115,8 @@ public struct ScheduleTask: Identifiable, Codable, Equatable {
         isEnabled: Bool = true,
         isPaused: Bool = false,
         createdAt: Date = Date(),
-        lastTriggeredAt: Date? = nil
+        lastTriggeredAt: Date? = nil,
+        triggerCount: Int? = 0
     ) {
         self.id = id
         self.name = name
@@ -119,6 +126,7 @@ public struct ScheduleTask: Identifiable, Codable, Equatable {
         self.isPaused = isPaused
         self.createdAt = createdAt
         self.lastTriggeredAt = lastTriggeredAt
+        self.triggerCount = triggerCount
         
         if case .countdown(let totalSeconds) = trigger {
             self.countdownRemainingSeconds = totalSeconds
@@ -152,8 +160,14 @@ public struct ScheduleTask: Identifiable, Codable, Equatable {
             
         case .interval(let intervalSeconds):
             let last = lastTriggeredAt ?? createdAt
-            let next = last.addingTimeInterval(TimeInterval(intervalSeconds))
-            return next > baseDate ? next : baseDate.addingTimeInterval(TimeInterval(intervalSeconds))
+            let elapsed = baseDate.timeIntervalSince(last)
+            if elapsed < 0 {
+                // last 在未来（极罕见），直接返回 last + 一个周期
+                return last.addingTimeInterval(TimeInterval(intervalSeconds))
+            }
+            // 对齐到真实下一个周期：last + (已过完整周期数 + 1) * interval
+            let cyclesPassed = Int(elapsed / Double(intervalSeconds))
+            return last.addingTimeInterval(Double(cyclesPassed + 1) * Double(intervalSeconds))
         }
     }
     
