@@ -366,9 +366,9 @@ struct QuickTaskCreateView: View {
                             }
                         }
                     
-                    // 下拉卡片：处于透明背景上层，紧密咬合按钮底边展开，完全消除悬空缝隙，文字像素级对齐
+                    // 下拉卡片：整卡直接覆盖上方按钮，四周拥有完整独立阴影，与 macOS 原生 Pop-up 菜单行为一致
                     actionKindDropdownList
-                        .offset(y: 24)
+                        .offset(y: 0)
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
                 }
             }
