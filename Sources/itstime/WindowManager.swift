@@ -7,6 +7,7 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     
     private var window: NSWindow?
     private var calendarSyncWindow: NSWindow?
+    private var updateWindow: NSWindow?
     
     public override init() {
         super.init()
@@ -73,6 +74,37 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     
     public func closeCalendarSyncWindow() {
         calendarSyncWindow?.orderOut(nil)
+    }
+    
+    public func openUpdateWindow() {
+        NSApplication.shared.setActivationPolicy(.regular)
+        
+        if let existing = updateWindow {
+            existing.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        let hostingController = NSHostingController(rootView: UpdateSheetView())
+        let newWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 380),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        newWindow.center()
+        newWindow.title = "软件更新"
+        newWindow.contentViewController = hostingController
+        newWindow.isReleasedWhenClosed = false
+        newWindow.delegate = self
+        
+        self.updateWindow = newWindow
+        newWindow.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+    
+    public func closeUpdateWindow() {
+        updateWindow?.orderOut(nil)
     }
     
     public func openScreenTimeWindow() {

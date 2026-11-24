@@ -199,4 +199,29 @@ final class ScreenTimeTrackerTests: XCTestCase {
         // 恢复锚点到今天
         tracker.goToToday()
     }
+    
+    @MainActor
+    func testPastEventLogsRecordedAndAggregated() {
+        let tracker = ScreenTimeTrackerService.shared
+        tracker.clearTodayData()
+        
+        let task1 = ScheduleTask(
+            name: "喝水提醒",
+            trigger: .interval(intervalSeconds: 1800)
+        )
+        let task2 = ScheduleTask(
+            name: "团队站会",
+            trigger: .daily(hour: 10, minute: 0)
+        )
+        
+        tracker.recordEventTrigger(for: task1)
+        tracker.recordEventTrigger(for: task2)
+        
+        let stats = tracker.currentStats
+        XCTAssertEqual(stats.pastEventLogs.count, 2)
+        XCTAssertEqual(stats.pastEventLogs[0].taskName, "喝水提醒")
+        XCTAssertEqual(stats.pastEventLogs[0].kindString, "interval")
+        XCTAssertEqual(stats.pastEventLogs[1].taskName, "团队站会")
+        XCTAssertEqual(stats.pastEventLogs[1].kindString, "daily")
+    }
 }

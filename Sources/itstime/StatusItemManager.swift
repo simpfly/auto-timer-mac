@@ -280,7 +280,17 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         launchItem.image = NSImage(systemSymbolName: "power.circle", accessibilityDescription: nil)
         menu.addItem(launchItem)
         
-        // 6. 关于 It's Time
+        // 6. 检查更新
+        let updateItem = NSMenuItem(
+            title: "检查更新...",
+            action: #selector(checkForUpdatesAction),
+            keyEquivalent: "u"
+        )
+        updateItem.target = self
+        updateItem.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
+        menu.addItem(updateItem)
+        
+        // 7. 关于 It's Time
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let aboutItem = NSMenuItem(
             title: "关于 It's Time (v\(appVersion))",
@@ -293,7 +303,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
-        // 7. 退出 It's Time
+        // 8. 退出 It's Time
         let quitItem = NSMenuItem(
             title: "退出 It's Time",
             action: #selector(quitApp),
@@ -317,6 +327,11 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         closePopover()
         WindowManager.shared.openCalendarSyncWindow()
     }
+    @objc private func checkForUpdatesAction() {
+        closePopover()
+        UpdateManager.shared.checkForUpdates(userInitiated: true)
+    }
+    
     @objc private func showAbout() {
         NSApplication.shared.activate(ignoringOtherApps: true)
         NSApplication.shared.orderFrontStandardAboutPanel(

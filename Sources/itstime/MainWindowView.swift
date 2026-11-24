@@ -4,6 +4,7 @@ import AppKit
 struct MainWindowView: View {
     @ObservedObject var scheduler = SchedulerEngine.shared
     @ObservedObject var audioService = AudioService.shared
+    @ObservedObject var updateManager = UpdateManager.shared
     
     @State private var showingEditor: Bool = false
     @State private var showingCalendarSync: Bool = false
@@ -163,6 +164,14 @@ struct MainWindowView: View {
                         showingCalendarSync = true
                     } label: {
                         Label("日历与提醒事项", systemImage: "calendar.badge.clock")
+                    }
+                    
+                    Divider()
+                    
+                    Button {
+                        updateManager.checkForUpdates(userInitiated: true)
+                    } label: {
+                        Label("检查更新...", systemImage: "arrow.triangle.2.circlepath")
                     }
                 } label: {
                     Image(systemName: "ellipsis")

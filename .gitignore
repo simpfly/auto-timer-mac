@@ -20,6 +20,7 @@ DerivedData/
 AutoTimer.app
 "It's Time.app"
 *.app
+*.zip
 
 # Logs
 logs/

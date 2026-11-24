@@ -84,23 +84,55 @@ public struct EventTriggerRecord: Identifiable, Codable, Equatable {
     }
 }
 
+/// 单次历史事件触发日志（用于在时间带展现已发生事件）
+public struct PastEventLogItem: Identifiable, Codable, Equatable {
+    public var id: UUID
+    public var taskId: UUID?
+    public var taskName: String
+    public var triggerTypeTitle: String
+    public var timestamp: Date
+    public var kindString: String // countdown, daily, interval, once, calendar
+    public var actionDesc: String
+    
+    public init(
+        id: UUID = UUID(),
+        taskId: UUID? = nil,
+        taskName: String,
+        triggerTypeTitle: String,
+        timestamp: Date = Date(),
+        kindString: String = "once",
+        actionDesc: String = ""
+    ) {
+        self.id = id
+        self.taskId = taskId
+        self.taskName = taskName
+        self.triggerTypeTitle = triggerTypeTitle
+        self.timestamp = timestamp
+        self.kindString = kindString
+        self.actionDesc = actionDesc
+    }
+}
+
 /// 某一日期的屏幕时间与事件统计完整记录
 public struct DailyScreenTimeRecord: Codable, Equatable {
     public let dateString: String // 格式: yyyy-MM-dd
     public var totalActiveSeconds: TimeInterval
     public var appUsages: [String: AppUsageRecord] // Key 为 bundleIdentifier
     public var eventTriggers: [UUID: EventTriggerRecord] // Key 为 Task UUID
+    public var pastEventLogs: [PastEventLogItem]? // 触发历史流水日志
     
     public init(
         dateString: String,
         totalActiveSeconds: TimeInterval = 0,
         appUsages: [String: AppUsageRecord] = [:],
-        eventTriggers: [UUID: EventTriggerRecord] = [:]
+        eventTriggers: [UUID: EventTriggerRecord] = [:],
+        pastEventLogs: [PastEventLogItem] = []
     ) {
         self.dateString = dateString
         self.totalActiveSeconds = totalActiveSeconds
         self.appUsages = appUsages
         self.eventTriggers = eventTriggers
+        self.pastEventLogs = pastEventLogs
     }
     
     /// 按使用时长倒序排列的应用记录列表
@@ -143,6 +175,7 @@ public struct AggregatedScreenTimeStats: Equatable {
     public var totalEventTriggerCount: Int
     public var periodDescription: String
     public var dailyAverageSeconds: TimeInterval
+    public var pastEventLogs: [PastEventLogItem]
     
     public init(
         scope: TimeScope,
@@ -151,7 +184,8 @@ public struct AggregatedScreenTimeStats: Equatable {
         sortedEventTriggers: [EventTriggerRecord] = [],
         totalEventTriggerCount: Int = 0,
         periodDescription: String = "",
-        dailyAverageSeconds: TimeInterval = 0
+        dailyAverageSeconds: TimeInterval = 0,
+        pastEventLogs: [PastEventLogItem] = []
     ) {
         self.scope = scope
         self.totalActiveSeconds = totalActiveSeconds
@@ -160,6 +194,7 @@ public struct AggregatedScreenTimeStats: Equatable {
         self.totalEventTriggerCount = totalEventTriggerCount
         self.periodDescription = periodDescription
         self.dailyAverageSeconds = dailyAverageSeconds
+        self.pastEventLogs = pastEventLogs
     }
     
     public var formattedTotalDuration: String {

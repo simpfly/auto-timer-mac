@@ -46,6 +46,14 @@ public struct ScreenTimeView: View {
             Divider()
                 .opacity(0.15)
             
+            // 历史事件时间带（展现现在之前已触发的事件轨迹）
+            CompactTimelineStripView(mode: .past)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            
+            Divider()
+                .opacity(0.12)
+            
             // 列表主区域：清晰无冗余标签
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 6) {

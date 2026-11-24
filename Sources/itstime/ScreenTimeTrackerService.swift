@@ -436,18 +436,40 @@ public final class ScreenTimeTrackerService: ObservableObject {
         // 息屏、锁屏或系统休眠时绝不计入统计
         guard !isScreenOrSessionLocked else { return }
         
+        let now = Date()
         var event = todayRecord.eventTriggers[task.id] ?? EventTriggerRecord(
             id: task.id,
             taskName: task.name,
             triggerTypeTitle: task.trigger.displayTitle,
             count: 0,
-            lastTriggeredAt: Date()
+            lastTriggeredAt: now
         )
         event.count += 1
         event.taskName = task.name
         event.triggerTypeTitle = task.trigger.displayTitle
-        event.lastTriggeredAt = Date()
+        event.lastTriggeredAt = now
         todayRecord.eventTriggers[task.id] = event
+        
+        // 记录单次流水日志（用于时间带展现已发生事件）
+        let kindStr: String
+        switch task.trigger {
+        case .countdown: kindStr = "countdown"
+        case .daily: kindStr = "daily"
+        case .interval: kindStr = "interval"
+        case .once: kindStr = "once"
+        }
+        let logItem = PastEventLogItem(
+            taskId: task.id,
+            taskName: task.name,
+            triggerTypeTitle: task.trigger.displayTitle,
+            timestamp: now,
+            kindString: kindStr,
+            actionDesc: task.action.summary
+        )
+        if todayRecord.pastEventLogs == nil {
+            todayRecord.pastEventLogs = []
+        }
+        todayRecord.pastEventLogs?.append(logItem)
         
         todaySortedEventTriggers = todayRecord.sortedEventTriggers
         todayTotalEventTriggerCount = todayRecord.totalEventTriggerCount
@@ -611,7 +633,8 @@ public final class ScreenTimeTrackerService: ObservableObject {
                     sortedEventTriggers: todayRecord.sortedEventTriggers,
                     totalEventTriggerCount: todayRecord.totalEventTriggerCount,
                     periodDescription: periodTitle,
-                    dailyAverageSeconds: todayRecord.totalActiveSeconds
+                    dailyAverageSeconds: todayRecord.totalActiveSeconds,
+                    pastEventLogs: todayRecord.pastEventLogs ?? []
                 )
             } else {
                 let targetDateStr = Self.dateFormatter.string(from: targetAnchor)
@@ -623,7 +646,8 @@ public final class ScreenTimeTrackerService: ObservableObject {
                         sortedEventTriggers: record.sortedEventTriggers,
                         totalEventTriggerCount: record.totalEventTriggerCount,
                         periodDescription: periodTitle,
-                        dailyAverageSeconds: record.totalActiveSeconds
+                        dailyAverageSeconds: record.totalActiveSeconds,
+                        pastEventLogs: record.pastEventLogs ?? []
                     )
                 } else {
                     return AggregatedScreenTimeStats(
@@ -633,7 +657,8 @@ public final class ScreenTimeTrackerService: ObservableObject {
                         sortedEventTriggers: [],
                         totalEventTriggerCount: 0,
                         periodDescription: periodTitle,
-                        dailyAverageSeconds: 0
+                        dailyAverageSeconds: 0,
+                        pastEventLogs: []
                     )
                 }
             }
@@ -712,9 +737,13 @@ public final class ScreenTimeTrackerService: ObservableObject {
         var totalSec: TimeInterval = 0
         var mergedApps: [String: AppUsageRecord] = [:]
         var mergedEvents: [UUID: EventTriggerRecord] = [:]
+        var allPastLogs: [PastEventLogItem] = []
         
         for r in records {
             totalSec += r.totalActiveSeconds
+            if let logs = r.pastEventLogs {
+                allPastLogs.append(contentsOf: logs)
+            }
             for (bundleId, app) in r.appUsages {
                 if var exist = mergedApps[bundleId] {
                     exist.durationSeconds += app.durationSeconds
@@ -740,6 +769,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
             }
         }
         
+        allPastLogs.sort { $0.timestamp < $1.timestamp }
         let daysCount = max(1, records.count)
         let dailyAvg = totalSec / Double(daysCount)
         let sortedApps = mergedApps.values.sorted { $0.durationSeconds > $1.durationSeconds }
@@ -753,7 +783,8 @@ public final class ScreenTimeTrackerService: ObservableObject {
             sortedEventTriggers: sortedEvents,
             totalEventTriggerCount: totalEventCount,
             periodDescription: periodDescription,
-            dailyAverageSeconds: dailyAvg
+            dailyAverageSeconds: dailyAvg,
+            pastEventLogs: allPastLogs
         )
     }
     

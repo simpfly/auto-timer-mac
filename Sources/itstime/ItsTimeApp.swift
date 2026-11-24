@@ -25,6 +25,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 WindowManager.shared.openMainWindow()
             }
         }
+        
+        // 延迟 10 秒静默检查更新，完全不影响启动性能
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
+            UpdateManager.shared.performDailySilentCheckIfNeeded()
+        }
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

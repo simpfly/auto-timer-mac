@@ -85,4 +85,11 @@ cat <<EOF > "${CONTENTS_DIR}/Info.plist"
 EOF
 
 echo "✅ 打包完成: ${SCRIPT_DIR}/${BUNDLE_NAME}"
+
+# 生成发布与原地更新专用的轻量压缩包 (保留全部 macOS 资源分支、权限与签名)
+UPDATE_ZIP="ItsTime-update.zip"
+echo "🗜️ 正在生成发布与自动更新包 ${UPDATE_ZIP}..."
+ditto -c -k --sequesterRsrc --keepParent "${BUNDLE_NAME}" "${UPDATE_ZIP}"
+echo "📦 更新包已生成: ${SCRIPT_DIR}/${UPDATE_ZIP}"
+
 echo "💡 可在终端执行: open \"${BUNDLE_NAME}\"，或直接双击运行！"

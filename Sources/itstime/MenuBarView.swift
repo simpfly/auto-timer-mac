@@ -7,6 +7,7 @@ struct MenuBarView: View {
     @ObservedObject var audioService = AudioService.shared
     @ObservedObject var launchManager = LaunchAtLoginManager.shared
     @ObservedObject var screenTime = ScreenTimeTrackerService.shared
+    @ObservedObject var updateManager = UpdateManager.shared
     
     @State private var showingEditor: Bool = false
     @State private var showingCalendarSync: Bool = false
@@ -239,6 +240,12 @@ struct MenuBarView: View {
                     set: { _ in launchManager.toggle() }
                 )) {
                     Label("开机自启动", systemImage: "power.circle")
+                }
+                
+                Button {
+                    updateManager.checkForUpdates(userInitiated: true)
+                } label: {
+                    Label("检查更新...", systemImage: "arrow.triangle.2.circlepath")
                 }
                 
                 Button {

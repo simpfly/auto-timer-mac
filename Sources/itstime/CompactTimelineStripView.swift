@@ -48,10 +48,19 @@ public struct TimelineEventItem: Identifiable {
     }
 }
 
+// MARK: - 时间带运行模式
+public enum TimelineStripMode {
+    case upcoming // 主窗口：未来即将触发
+    case past     // 统计窗口：现在之前已触发
+}
+
 // MARK: - 紧凑型横向时间轴带 (非等比标尺：全事件流式概览，类型专属色彩，高颜值悬浮气泡)
 public struct CompactTimelineStripView: View {
+    public var mode: TimelineStripMode
+    
     @ObservedObject var scheduler = SchedulerEngine.shared
     @ObservedObject var eventKit = EventKitService.shared
+    @ObservedObject var tracker = ScreenTimeTrackerService.shared
     
     // 定时刷新触发（每 1 秒刷新当前时间与倒数时分秒）
     @State private var currentDate: Date = Date()
@@ -61,7 +70,19 @@ public struct CompactTimelineStripView: View {
     @State private var hoveredEvent: TimelineEventItem? = nil
     @State private var hoveredX: CGFloat = 0
     
-    public init() {}
+    public init(mode: TimelineStripMode = .upcoming) {
+        self.mode = mode
+    }
+    
+    // MARK: - 获取要展示的事件条目
+    private var displayedEvents: [TimelineEventItem] {
+        switch mode {
+        case .upcoming:
+            return upcomingEvents
+        case .past:
+            return pastEvents
+        }
+    }
     
     // MARK: - 获取所有即将到来的事件（不设死板窗口，各类事件按其类型提取与赋予颜色）
     private var upcomingEvents: [TimelineEventItem] {
@@ -112,28 +133,120 @@ public struct CompactTimelineStripView: View {
         return Array(list.sorted { $0.date < $1.date }.prefix(4))
     }
     
+    // MARK: - 获取现在之前已经触发过的事件
+    private var pastEvents: [TimelineEventItem] {
+        let now = currentDate
+        let calendar = Calendar.current
+        var list: [TimelineEventItem] = []
+        var recordedIds = Set<String>()
+        
+        // 1. 从 ScreenTimeTrackerService 历史流水中提取
+        let logs = tracker.currentStats.pastEventLogs
+        for log in logs where log.timestamp <= now {
+            let kind: TimelineEventItem.TimelineKind
+            switch log.kindString {
+            case "countdown": kind = .countdown
+            case "daily": kind = .daily
+            case "interval": kind = .interval
+            case "once": kind = .once
+            case "calendar": kind = .calendar
+            default: kind = .once
+            }
+            let item = TimelineEventItem(
+                id: "past_log_\(log.id)",
+                name: log.taskName,
+                date: log.timestamp,
+                kind: kind,
+                actionDesc: log.actionDesc
+            )
+            list.append(item)
+            if let tId = log.taskId {
+                recordedIds.insert("task_\(tId)")
+            }
+        }
+        
+        // 2. 兜底补全：若当前流水尚未包含某些已触发任务（如旧版本记录或今日已触发）
+        for task in scheduler.tasks {
+            if let lastDate = task.lastTriggeredAt, lastDate <= now && calendar.isDateInToday(lastDate) {
+                let taskIdStr = "task_\(task.id)"
+                if !recordedIds.contains(taskIdStr) {
+                    let kind: TimelineEventItem.TimelineKind
+                    switch task.trigger {
+                    case .countdown: kind = .countdown
+                    case .daily: kind = .daily
+                    case .interval: kind = .interval
+                    case .once: kind = .once
+                    }
+                    list.append(TimelineEventItem(
+                        id: taskIdStr,
+                        name: task.name,
+                        date: lastDate,
+                        kind: kind,
+                        actionDesc: task.action.summary
+                    ))
+                    recordedIds.insert(taskIdStr)
+                }
+            }
+        }
+        
+        // 3. 系统日历日程（今天已经开始或过去的日程）
+        if eventKit.isCalendarAuthorized {
+            for ev in eventKit.todayCalendarEvents {
+                if !ev.isAllDay && ev.startDate < now {
+                    if !EventKitService.isCalendarEventImported(event: ev, tasks: scheduler.tasks) {
+                        list.append(TimelineEventItem(
+                            id: "cal_past_\(ev.id)",
+                            name: ev.title,
+                            date: ev.startDate,
+                            kind: .calendar,
+                            actionDesc: ev.location ?? "系统日历日程"
+                        ))
+                    }
+                }
+            }
+        }
+        
+        // 按时间升序排序，取最近触发的最多 4 个事件
+        let sorted = list.sorted { $0.date < $1.date }
+        return Array(sorted.suffix(4))
+    }
+    
     // MARK: - 大致间距符合真实时差的自适应排布算法（保序、时差大间距大、较远可清晰显示）
     private func computeRatios(for events: [TimelineEventItem], trackWidth: CGFloat) -> [CGFloat] {
         let count = events.count
         guard count > 0 else { return [] }
         
         let now = currentDate
-        let deltas = events.map { max(10, $0.date.timeIntervalSince(now)) }
-        guard let maxDelta = deltas.last else { return [] }
-        
-        if count == 1 {
-            return [0.60]
-        }
-        
-        // 留给当前时间文本（如 18:02）足够的排版呼吸空间
         let minRatio: CGFloat = 0.20
-        let maxRatio: CGFloat = 0.98
+        let maxRatio: CGFloat = 0.95
         let span = maxRatio - minRatio
         
-        // 真实时间差比例映射：时间跨度大时，物理间距成正比拉大
-        var ratios: [CGFloat] = deltas.map { delta in
-            let frac = CGFloat(delta / maxDelta)
-            return minRatio + frac * span
+        var ratios: [CGFloat] = []
+        
+        if mode == .upcoming {
+            let deltas = events.map { max(10, $0.date.timeIntervalSince(now)) }
+            guard let maxDelta = deltas.last else { return [] }
+            
+            if count == 1 {
+                return [0.60]
+            }
+            
+            ratios = deltas.map { delta in
+                let frac = CGFloat(delta / maxDelta)
+                return minRatio + frac * span
+            }
+        } else {
+            // 过去事件：事件按时间由早到晚升序排列
+            if count == 1 {
+                return [0.55]
+            }
+            let firstDate = events.first!.date
+            let totalSpan = max(60, events.last!.date.timeIntervalSince(firstDate))
+            ratios = events.map { ev in
+                let delta = max(0, ev.date.timeIntervalSince(firstDate))
+                let frac = CGFloat(delta / totalSpan)
+                return minRatio + frac * span
+            }
         }
         
         // 最小防重叠间距保护（当两个事件距离极其接近时，保证至少 32pt 间距，不重叠）
@@ -169,6 +282,9 @@ public struct CompactTimelineStripView: View {
         if calendar.isDateInToday(date) {
             formatter.dateFormat = "HH:mm"
             return formatter.string(from: date)
+        } else if calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "HH:mm"
+            return "昨 " + formatter.string(from: date)
         } else if calendar.isDateInTomorrow(date) {
             formatter.dateFormat = "HH:mm"
             return "明 " + formatter.string(from: date)
@@ -184,6 +300,9 @@ public struct CompactTimelineStripView: View {
         let formatter = DateFormatter()
         if calendar.isDateInToday(date) {
             formatter.dateFormat = "今天 HH:mm"
+            return formatter.string(from: date)
+        } else if calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "昨天 HH:mm"
             return formatter.string(from: date)
         } else if calendar.isDateInTomorrow(date) {
             formatter.dateFormat = "明天 HH:mm"
@@ -203,7 +322,7 @@ public struct CompactTimelineStripView: View {
             let trackY: CGFloat = 7.5
             let textY: CGFloat = trackY + 12.5
             
-            let events = upcomingEvents
+            let events = displayedEvents
             let ratios = computeRatios(for: events, trackWidth: trackW)
             
             ZStack(alignment: .topLeading) {
@@ -214,13 +333,13 @@ public struct CompactTimelineStripView: View {
                 }
                 .stroke(Color.primary.opacity(0.12), lineWidth: 1.5)
                 
-                // 2. 当前起点标示（小蓝圆点 + 下方实际时间文本，严格垂直对齐，无偏移）
+                // 2. 当前起点标示（小圆点 + 下方实际时间/状态文本，严格垂直对齐，无偏移）
                 Circle()
-                    .fill(Color.accentColor)
+                    .fill(mode == .past ? Color.secondary.opacity(0.4) : Color.accentColor)
                     .frame(width: 4.5, height: 4.5)
                     .position(x: padL, y: trackY)
                 
-                Text(formattedCurrentTime)
+                Text(mode == .past ? "已发生" : formattedCurrentTime)
                     .font(.system(size: 8.5, weight: .medium, design: .rounded))
                     .foregroundColor(.secondary.opacity(0.75))
                     .lineLimit(1)
@@ -229,7 +348,7 @@ public struct CompactTimelineStripView: View {
                 
                 // 3. 动态非等比事件节点与时间标注
                 if events.isEmpty {
-                    Text("暂无待办")
+                    Text(mode == .past ? "暂无已触发事件" : "暂无待办")
                         .font(.system(size: 9, weight: .regular))
                         .foregroundColor(.secondary.opacity(0.45))
                         .position(x: padL + trackW * 0.5, y: textY)
@@ -303,7 +422,7 @@ struct EventTooltipBubbleView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // 顶栏：类型标签胶囊 + 倒计时剩余时长（足宽且固定尺寸，绝不截断）
+            // 顶栏：类型标签胶囊 + 倒计时剩余时长或已发生时长（足宽且固定尺寸，绝不截断）
             HStack(spacing: 6) {
                 HStack(spacing: 3) {
                     Image(systemName: item.kind.icon)
@@ -361,8 +480,24 @@ struct EventTooltipBubbleView: View {
         }
     }
     
-    // MARK: - 格式化倒计时剩余时分秒
+    // MARK: - 格式化倒计时剩余时分秒或已发生时间
     private func formattedRemainingCountdown(diffSec: TimeInterval) -> String {
+        if diffSec < -1 {
+            let pastSec = Int(abs(diffSec))
+            let h = pastSec / 3600
+            let m = (pastSec % 3600) / 60
+            if h >= 24 {
+                let days = h / 24
+                return "\(days)天前"
+            } else if h > 0 {
+                return m > 0 ? "\(h)小时\(m)分前" : "\(h)小时前"
+            } else if m > 0 {
+                return "\(m)分钟前"
+            } else {
+                return "刚刚"
+            }
+        }
+        
         let total = Int(max(0, diffSec))
         if total <= 0 { return "即将触发" }
         let h = total / 3600
@@ -392,6 +527,9 @@ struct EventTooltipBubbleView: View {
         let formatter = DateFormatter()
         if calendar.isDateInToday(date) {
             formatter.dateFormat = "今天 HH:mm"
+            return formatter.string(from: date)
+        } else if calendar.isDateInYesterday(date) {
+            formatter.dateFormat = "昨天 HH:mm"
             return formatter.string(from: date)
         } else if calendar.isDateInTomorrow(date) {
             formatter.dateFormat = "明天 HH:mm"

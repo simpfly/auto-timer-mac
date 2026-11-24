@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>It's Time - 定时播放 不被忽略 | macOS 原生极简定时助手</title>
-  <meta name="description" content="专为打破久坐打造的 macOS 定时助手。到了时间，自动播放八段锦或眼保健操。">
-  <link rel="icon" type="image/png" href="assets/icon.png">
+  <meta name="description" content="专为打破久坐打造的 macOS 定时助手。定时播放，不被忽略。">
+  <link rel="icon" type="image/png" href="assets/icon-transparent.png">
   <style>
     :root {
       --bg: #ffffff;
@@ -69,24 +69,62 @@
     }
 
     .brand img {
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
+      width: 20px;
+      height: 20px;
+      display: block;
     }
 
     .nav-actions {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
     }
 
-    .nav-actions a {
-      color: var(--text-sub);
+    /* 极简高质感 GitHub Star 胶囊徽章 */
+    .nav-github-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 980px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      background: rgba(0, 0, 0, 0.02);
+      color: var(--text-main);
       text-decoration: none;
-      transition: color 0.15s;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s ease;
     }
 
-    .nav-actions a:hover {
+    .nav-github-badge:hover {
+      border-color: rgba(0, 0, 0, 0.18);
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .gh-icon {
+      color: var(--text-main);
+      display: block;
+    }
+
+    .gh-text {
+      color: var(--text-main);
+    }
+
+    .gh-divider {
+      width: 1px;
+      height: 11px;
+      background: rgba(0, 0, 0, 0.12);
+      margin: 0 1px;
+    }
+
+    .gh-count {
+      color: var(--text-sub);
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+    }
+
+    .nav-github-badge:hover .gh-count {
       color: var(--text-main);
     }
 
@@ -97,6 +135,7 @@
       font-weight: 500;
       padding: 5px 14px;
       border-radius: 980px;
+      text-decoration: none;
       transition: opacity 0.2s;
     }
 
@@ -139,7 +178,7 @@
       text-decoration: none;
       font-size: 15px;
       font-weight: 500;
-      padding: 13px 26px;
+      padding: 13px 28px;
       border-radius: 980px;
       transition: background 0.2s;
     }
@@ -165,7 +204,7 @@
       color: var(--text-main);
     }
 
-    /* It's Time to [固定下划线 + 应用图标 + 纯黑文字 + 灰色图标] */
+    /* It's Time to [固定下划线 + 透明背景品牌图标 + 纯黑文字 + 灰色图标] */
     .ticker-bar-fixed {
       display: flex;
       justify-content: center;
@@ -177,16 +216,15 @@
     }
 
     .ticker-app-icon {
-      width: 26px;
-      height: 26px;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      width: 24px;
+      height: 24px;
       margin-right: 10px;
       flex-shrink: 0;
+      display: block;
     }
 
     .ticker-label-fixed {
-      color: #1d1d1f; /* 字体颜色更黑，清晰醒目 */
+      color: #1d1d1f;
       font-weight: 600;
       white-space: nowrap;
       margin-right: 10px;
@@ -198,7 +236,7 @@
       height: 36px;
       display: inline-flex;
       align-items: center;
-      justify-content: flex-start; /* 左对齐，不居中 */
+      justify-content: flex-start;
       padding-left: 2px;
     }
 
@@ -236,16 +274,7 @@
     .ticker-icon {
       display: inline-flex;
       align-items: center;
-      color: var(--text-sub); /* 优雅中灰色图标 */
-    }
-
-    .hero-subtitle {
-      font-size: clamp(16px, 2.2vw, 20px);
       color: var(--text-sub);
-      max-width: 580px;
-      margin: 0 auto 36px;
-      line-height: 1.55;
-      font-weight: 400;
     }
 
     .hero-actions {
@@ -269,7 +298,7 @@
       display: block;
     }
 
-    /* 三个核心卖点卡片 (根据 README) */
+    /* 三个核心卖点卡片 */
     .features {
       padding: 90px 0;
     }
@@ -284,7 +313,7 @@
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 36px 30px;
+      padding: 28px 24px;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -295,16 +324,249 @@
       border-color: var(--border-hover);
     }
 
-    .feature-title {
-      font-size: 20px;
+    /* 复用实际 UI 的微型组件容器：直接融入卡片底色，无多余白底 */
+    .card-visual {
+      height: 84px;
+      margin-bottom: 22px;
+      background: transparent;
+      display: flex;
+      align-items: center;
+    }
+
+    /* 真实 UI 1：App 实际任务行卡片 */
+    .ui-task-row {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .ui-task-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ui-task-title-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ui-task-name {
+      font-size: 13px;
       font-weight: 600;
-      letter-spacing: -0.02em;
-      margin-bottom: 12px;
       color: var(--text-main);
     }
 
+    .ui-badge-pill {
+      font-size: 10px;
+      color: #0d9488;
+      background: rgba(13, 148, 136, 0.1);
+      padding: 1.5px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    /* 原生绿色 Toggle 开关 */
+    .ui-toggle-switch {
+      width: 30px;
+      height: 18px;
+      background: #34c759;
+      border-radius: 980px;
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .ui-toggle-thumb {
+      width: 14px;
+      height: 14px;
+      background: #ffffff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .ui-task-sub-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-sub);
+    }
+
+    .ui-task-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ui-audio-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .ui-task-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #9ca3af;
+    }
+
+    .feature-card:hover .ui-task-actions svg {
+      color: var(--text-main);
+    }
+
+    /* 真实 UI 2：App 实际快捷创建面板 */
+    .ui-create-panel {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      user-select: none;
+    }
+
+    .ui-input-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.04);
+      padding: 5px 7px 5px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--text-main);
+    }
+
+    .ui-input-content {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .ui-input-cursor {
+      width: 1.5px;
+      height: 13px;
+      background: #0071e3;
+      animation: cursorBlink 1s infinite;
+      animation-play-state: paused;
+    }
+
+    .feature-card:hover .ui-input-cursor {
+      animation-play-state: running;
+    }
+
+    @keyframes cursorBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    .ui-submit-btn {
+      width: 22px;
+      height: 22px;
+      background: #0071e3;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      flex-shrink: 0;
+      transition: transform 0.15s ease;
+    }
+
+    .feature-card:hover .ui-submit-btn {
+      transform: scale(1.06);
+    }
+
+    .ui-modes-group {
+      display: flex;
+      gap: 5px;
+    }
+
+    .ui-mode-pill {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .ui-mode-pill.active {
+      background: #0071e3;
+      color: #ffffff;
+    }
+
+    .ui-mode-pill.normal {
+      background: rgba(0, 0, 0, 0.04);
+      color: var(--text-sub);
+    }
+
+    /* 真实 UI 3：App 实际右上角时间轴标尺 */
+    .ui-strip-panel {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      user-select: none;
+    }
+
+    .ui-strip-labels {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ui-label-blue { color: #0071e3; font-weight: 600; }
+    .ui-label-teal { color: #0d9488; font-weight: 500; }
+    .ui-label-purple { color: #7c3aed; font-weight: 500; }
+
+    .ui-strip-track {
+      position: relative;
+      height: 2px;
+      background: rgba(0, 0, 0, 0.08);
+      border-radius: 1px;
+      margin: 0 4px;
+    }
+
+    .ui-strip-point {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      position: absolute;
+      top: -2.5px;
+      transition: transform 0.2s ease;
+    }
+
+    .feature-card:hover .ui-strip-point {
+      transform: scale(1.25);
+    }
+
+    .ui-strip-point.pt-blue { left: 0%; background: #0071e3; }
+    .ui-strip-point.pt-teal { left: 52%; background: #0d9488; }
+    .ui-strip-point.pt-purple { left: 100%; transform: translateX(-100%); background: #7c3aed; }
+
+    .feature-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      color: var(--text-main);
+      line-height: 1.4;
+    }
+
     .feature-desc {
-      font-size: 15px;
+      font-size: 14px;
       color: var(--text-sub);
       line-height: 1.6;
     }
@@ -355,7 +617,9 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .ticker-group {
+      .ticker-group,
+      .ui-input-cursor {
+        animation: none !important;
         transition: none !important;
       }
     }
@@ -367,11 +631,19 @@
   <header>
     <div class="nav-container">
       <a href="#" class="brand">
-        <img src="assets/icon.png" alt="It's Time 图标">
+        <img src="assets/icon-transparent.png" alt="It's Time 品牌图标">
         <span>It's Time</span>
       </a>
       <div class="nav-actions">
-        <a href="https://github.com/simpfly/its-time-mac" target="_blank">GitHub</a>
+        <!-- 优雅微边框 GitHub Star 胶囊徽章 -->
+        <a href="https://github.com/simpfly/its-time-mac" target="_blank" class="nav-github-badge">
+          <svg class="gh-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span class="gh-text">Star</span>
+          <span class="gh-divider"></span>
+          <span class="gh-count" id="navStarCount">0</span>
+        </a>
         <a href="https://github.com/simpfly/its-time-mac/releases" class="btn-nav">免费下载</a>
       </div>
     </div>
@@ -385,15 +657,15 @@
         定时播放 不被忽略
       </h1>
 
-      <!-- It's Time to [应用图标 + 更黑字体 + 固定下划线 + 文字后方灰色图标 + 左对齐] -->
+      <!-- It's Time to [背景透明品牌图标 + 更黑字体 + 固定下划线 + 文字后方灰色图标 + 左对齐] -->
       <div class="ticker-bar-fixed">
-        <img src="assets/icon.png" alt="It's Time 图标" class="ticker-app-icon">
+        <img src="assets/icon-transparent.png" alt="It's Time 品牌图标" class="ticker-app-icon">
         <span class="ticker-label-fixed">It's Time to</span>
         <div class="ticker-target-slot">
           <div id="tickerGroup" class="ticker-group">
             <span id="tickerText">做眼保健操</span>
             <span id="tickerIcon" class="ticker-icon">
-              <!-- 眼保健操初始图标 -->
+              <!-- 初始图标：眼保健操 -->
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </span>
           </div>
@@ -406,38 +678,106 @@
         <a href="https://github.com/simpfly/its-time-mac/releases" class="btn-primary">
           下载 macOS 版
         </a>
+        <!-- 纯粹干净的次级按钮 -->
         <a href="https://github.com/simpfly/its-time-mac" target="_blank" class="btn-secondary">
           查看源码
         </a>
       </div>
 
-      <!-- MacBook 实机界面展示 -->
+      <!-- 实机近景展示图 (用户制作的高清轻量图) -->
       <div class="mockup-container">
-        <img src="assets/screenshots/hero-preview.jpg?v=20261124" alt="It's Time 实机界面展示">
+        <img src="assets/screenshots/hero-preview.jpg?v=3" alt="It's Time 真实界面展示">
       </div>
     </section>
 
-    <!-- 三个核心卖点卡片 (阅读 README 提炼) -->
+    <!-- 三个核心卖点卡片 (复用 App 真实原生 UI) -->
     <section class="features container">
       <div class="features-grid">
+        <!-- 卡片 1：复用 App 真实任务卡片行 -->
         <div class="feature-card">
-          <h3 class="feature-title">自然语言快速创建</h3>
+          <div class="card-visual">
+            <div class="ui-task-row">
+              <div class="ui-task-header">
+                <div class="ui-task-title-group">
+                  <span class="ui-task-name">做眼保健操</span>
+                  <span class="ui-badge-pill">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                    循环 下次 15:27
+                  </span>
+                </div>
+                <div class="ui-toggle-switch">
+                  <div class="ui-toggle-thumb"></div>
+                </div>
+              </div>
+              <div class="ui-task-sub-row">
+                <div class="ui-task-meta">
+                  <span>45分钟</span>
+                  <span>·</span>
+                  <span class="ui-audio-tag">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                    眼保健操.mp3
+                  </span>
+                </div>
+                <div class="ui-task-actions">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+          <h3 class="feature-title">只响一声太容易被顺手划掉</h3>
           <p class="feature-desc">
-            输入“每45分钟做眼保健操”或“半小时后提醒我”，自动识别时间并填入，回车即启动。
+            到点直接播放完整音频，用声音促使你离开键盘。
           </p>
         </div>
 
+        <!-- 卡片 2：复用 App 真实快速创建输入栏 -->
         <div class="feature-card">
-          <h3 class="feature-title">菜单栏常驻与全天时间轴</h3>
+          <div class="card-visual">
+            <div class="ui-create-panel">
+              <div class="ui-input-box">
+                <div class="ui-input-content">
+                  <span>半小时后提醒我</span>
+                  <span class="ui-input-cursor"></span>
+                </div>
+                <div class="ui-submit-btn">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                </div>
+              </div>
+              <div class="ui-modes-group">
+                <span class="ui-mode-pill active">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  定时
+                </span>
+                <span class="ui-mode-pill normal">循环</span>
+                <span class="ui-mode-pill normal">倒计时</span>
+              </div>
+            </div>
+          </div>
+          <h3 class="feature-title">设闹钟嫌繁琐往往懒得去调</h3>
           <p class="feature-desc">
-            零 Dock 占用，图标实时显示倒计时；内嵌彩色时间轴，全天任务分布与剩余时间一眼看清。
+            输入“半小时后提醒我”，自动识别时间，回车即启动。
           </p>
         </div>
 
+        <!-- 卡片 3：复用 App 真实右上角流式时间轴标尺 -->
         <div class="feature-card">
-          <h3 class="feature-title">锁屏与休眠智能跳过</h3>
+          <div class="card-visual">
+            <div class="ui-strip-panel">
+              <div class="ui-strip-labels">
+                <span class="ui-label-blue">14:58</span>
+                <span class="ui-label-teal">15:27</span>
+                <span class="ui-label-purple">16:00</span>
+              </div>
+              <div class="ui-strip-track">
+                <div class="ui-strip-point pt-blue"></div>
+                <div class="ui-strip-point pt-teal"></div>
+                <div class="ui-strip-point pt-purple"></div>
+              </div>
+            </div>
+          </div>
+          <h3 class="feature-title">总记不清今天还剩什么安排</h3>
           <p class="feature-desc">
-            音频触发前 5 秒可跳过；锁屏、息屏或合盖立即停止，唤醒后绝不补发错过的提醒，不打扰。
+            常驻菜单栏，彩色时间轴一眼看清全天排期与剩余时间。
           </p>
         </div>
       </div>
@@ -458,7 +798,7 @@
   </footer>
 
   <script>
-    // 轮播事项配置（纯黑字 + 相应灰色 SVG 图标）
+    // 轮播事项配置
     const tasks = [
       {
         text: '做眼保健操',
@@ -499,6 +839,23 @@
 
     // 每 2.8 秒平滑切换一次
     setInterval(rotateTask, 2800);
+
+    // 动态拉取 GitHub Star 标数
+    function fetchGitHubStars() {
+      fetch('https://api.github.com/repos/simpfly/its-time-mac')
+        .then(response => {
+          if (!response.ok) throw new Error('API failed');
+          return response.json();
+        })
+        .then(data => {
+          if (typeof data.stargazers_count === 'number') {
+            const navStar = document.getElementById('navStarCount');
+            if (navStar) navStar.textContent = data.stargazers_count;
+          }
+        })
+        .catch(() => {});
+    }
+    fetchGitHubStars();
   </script>
 </body>
 </html>
