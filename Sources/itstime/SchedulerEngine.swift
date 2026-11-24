@@ -158,6 +158,9 @@ public final class SchedulerEngine: ObservableObject {
         AudioService.shared.stop(fadeOut: false)
         AudioPreAlertHUD.shared.dismiss()
         pendingAudioAlert = nil
+        // 锁屏时立即刷新所有 interval/countdown 周期起点，
+        // 防止解锁后因锁屏期间时间累积而立即触发
+        cleanMissedTasksAfterWake()
     }
     
     private func handleScreenUnlocked() {
