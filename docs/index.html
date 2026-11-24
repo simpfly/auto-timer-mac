@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>It's Time - 定时播放，不被忽略 | macOS 原生极简定时助手</title>
+  <title>It's Time - 定时播放 不被忽略 | macOS 原生极简定时助手</title>
   <meta name="description" content="专为打破久坐打造的 macOS 定时助手。到了时间，自动播放八段锦或眼保健操。">
   <link rel="icon" type="image/png" href="assets/icon.png">
   <style>
@@ -150,49 +150,93 @@
 
     /* Hero */
     .hero {
-      padding-top: 136px;
+      padding-top: 140px;
       padding-bottom: 70px;
       text-align: center;
     }
 
-    /* It's Time to [轮播事项] */
-    .ticker-bar {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: clamp(16px, 2.5vw, 22px);
-      font-weight: 500;
-      color: var(--text-sub);
-      margin-bottom: 14px;
-      letter-spacing: -0.01em;
-    }
-
-    .ticker-target {
-      color: var(--text-main);
-      font-weight: 600;
-      border-bottom: 2px solid var(--text-main);
-      padding-bottom: 2px;
-      display: inline-block;
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    .ticker-target.fade-out {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-
-    .ticker-target.fade-in {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
+    /* 主标题：无标点 */
     .hero-title {
       font-size: clamp(38px, 6.5vw, 70px);
       font-weight: 700;
       letter-spacing: -0.035em;
       line-height: 1.1;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       color: var(--text-main);
+    }
+
+    /* It's Time to [固定下划线 + 应用图标 + 纯黑文字 + 灰色图标] */
+    .ticker-bar-fixed {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: clamp(18px, 2.6vw, 24px);
+      font-weight: 600;
+      margin-bottom: 40px;
+      letter-spacing: -0.015em;
+    }
+
+    .ticker-app-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+
+    .ticker-label-fixed {
+      color: #1d1d1f; /* 字体颜色更黑，清晰醒目 */
+      font-weight: 600;
+      white-space: nowrap;
+      margin-right: 10px;
+    }
+
+    .ticker-target-slot {
+      position: relative;
+      width: 170px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start; /* 左对齐，不居中 */
+      padding-left: 2px;
+    }
+
+    /* 绝对固定宽度的下划线 */
+    .ticker-underline-fixed {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background-color: var(--text-main);
+      border-radius: 1px;
+    }
+
+    /* 轮播内容组：纯黑字 + 后面灰色图标 */
+    .ticker-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--text-main);
+      font-weight: 600;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .ticker-group.fade-out {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+
+    .ticker-group.fade-in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .ticker-icon {
+      display: inline-flex;
+      align-items: center;
+      color: var(--text-sub); /* 优雅中灰色图标 */
     }
 
     .hero-subtitle {
@@ -225,7 +269,7 @@
       display: block;
     }
 
-    /* 三个极简卡片 */
+    /* 三个核心卖点卡片 (根据 README) */
     .features {
       padding: 90px 0;
     }
@@ -255,7 +299,7 @@
       font-size: 20px;
       font-weight: 600;
       letter-spacing: -0.02em;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       color: var(--text-main);
     }
 
@@ -302,10 +346,16 @@
       .hero {
         padding-top: 100px;
       }
+      .ticker-bar-fixed {
+        font-size: 17px;
+      }
+      .ticker-target-slot {
+        width: 145px;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .ticker-target {
+      .ticker-group {
         transition: none !important;
       }
     }
@@ -330,19 +380,27 @@
   <main>
     <!-- Hero 核心展示 -->
     <section class="hero container">
-      <!-- It's Time to [事项轮播] -->
-      <div class="ticker-bar">
-        <span>It's Time to</span>
-        <span id="tickerItem" class="ticker-target">做眼保健操</span>
-      </div>
-
+      <!-- 主标题：无标点 -->
       <h1 class="hero-title">
-        定时播放，不被忽略。
+        定时播放 不被忽略
       </h1>
 
-      <p class="hero-subtitle">
-        到了时间，自动播放八段锦或眼保健操。
-      </p>
+      <!-- It's Time to [应用图标 + 更黑字体 + 固定下划线 + 文字后方灰色图标 + 左对齐] -->
+      <div class="ticker-bar-fixed">
+        <img src="assets/icon.png" alt="It's Time 图标" class="ticker-app-icon">
+        <span class="ticker-label-fixed">It's Time to</span>
+        <div class="ticker-target-slot">
+          <div id="tickerGroup" class="ticker-group">
+            <span id="tickerText">做眼保健操</span>
+            <span id="tickerIcon" class="ticker-icon">
+              <!-- 眼保健操初始图标 -->
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </span>
+          </div>
+          <!-- 长度固定的下划线 -->
+          <div class="ticker-underline-fixed"></div>
+        </div>
+      </div>
 
       <div class="hero-actions">
         <a href="https://github.com/simpfly/its-time-mac/releases" class="btn-primary">
@@ -353,33 +411,33 @@
         </a>
       </div>
 
-      <!-- 硬件样机外壳实机展示 -->
+      <!-- MacBook 实机界面展示 -->
       <div class="mockup-container">
-        <img src="assets/screenshots/hero-preview.jpg?v=3" alt="It's Time 实机界面展示">
+        <img src="assets/screenshots/hero-preview.jpg?v=20261124" alt="It's Time 实机界面展示">
       </div>
     </section>
 
-    <!-- 三个核心功能卡片 -->
+    <!-- 三个核心卖点卡片 (阅读 README 提炼) -->
     <section class="features container">
       <div class="features-grid">
         <div class="feature-card">
-          <h3 class="feature-title">定时播放</h3>
+          <h3 class="feature-title">自然语言快速创建</h3>
           <p class="feature-desc">
-            支持固定时间、循环间隔与倒计时，到点自动播放音频。
+            输入“每45分钟做眼保健操”或“半小时后提醒我”，自动识别时间并填入，回车即启动。
           </p>
         </div>
 
         <div class="feature-card">
-          <h3 class="feature-title">提前提示</h3>
+          <h3 class="feature-title">菜单栏常驻与全天时间轴</h3>
           <p class="feature-desc">
-            播放前 3 秒在菜单栏提示，可随时跳过。
+            零 Dock 占用，图标实时显示倒计时；内嵌彩色时间轴，全天任务分布与剩余时间一眼看清。
           </p>
         </div>
 
         <div class="feature-card">
-          <h3 class="feature-title">空闲防休眠，锁屏不打扰</h3>
+          <h3 class="feature-title">锁屏与休眠智能跳过</h3>
           <p class="feature-desc">
-            播放时防止电脑空闲休眠；锁屏状态下不播放。
+            音频触发前 5 秒可跳过；锁屏、息屏或合盖立即停止，唤醒后绝不补发错过的提醒，不打扰。
           </p>
         </div>
       </div>
@@ -400,26 +458,42 @@
   </footer>
 
   <script>
-    // 轮播事项列表（已按指令剔除例会，仅保留核心健康/专注事项）
+    // 轮播事项配置（纯黑字 + 相应灰色 SVG 图标）
     const tasks = [
-      '做眼保健操',
-      '练八段锦',
-      '喝杯水',
-      '站起来活动'
+      {
+        text: '做眼保健操',
+        icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>'
+      },
+      {
+        text: '练八段锦',
+        icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"></circle><path d="m9 20 3-6 3 6"></path><path d="m6 8 6 2 6-2"></path><path d="M12 10v4"></path></svg>'
+      },
+      {
+        text: '喝杯水',
+        icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>'
+      },
+      {
+        text: '站起来活动',
+        icon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"></circle><path d="m15 22-3-7-3 7"></path><path d="M9 13V9l3 2 3-2v4"></path></svg>'
+      }
     ];
+
     let currentIndex = 0;
-    const tickerEl = document.getElementById('tickerItem');
+    const tickerGroup = document.getElementById('tickerGroup');
+    const tickerText = document.getElementById('tickerText');
+    const tickerIcon = document.getElementById('tickerIcon');
 
     function rotateTask() {
-      if (!tickerEl) return;
-      tickerEl.classList.remove('fade-in');
-      tickerEl.classList.add('fade-out');
+      if (!tickerGroup) return;
+      tickerGroup.classList.remove('fade-in');
+      tickerGroup.classList.add('fade-out');
 
       setTimeout(() => {
         currentIndex = (currentIndex + 1) % tasks.length;
-        tickerEl.textContent = tasks[currentIndex];
-        tickerEl.classList.remove('fade-out');
-        tickerEl.classList.add('fade-in');
+        tickerText.textContent = tasks[currentIndex].text;
+        tickerIcon.innerHTML = tasks[currentIndex].icon;
+        tickerGroup.classList.remove('fade-out');
+        tickerGroup.classList.add('fade-in');
       }, 200);
     }
 
