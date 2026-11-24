@@ -70,18 +70,8 @@
 
 ## 界面预览
 
-### 主窗口
-
 <div align="center">
-  <img src="assets/screenshots/main-window.png" width="85%" alt="主窗口" />
-</div>
-
-<br/>
-
-### 菜单栏面板
-
-<div align="center">
-  <img src="assets/screenshots/menubar-panel.png" width="60%" alt="菜单栏面板" />
+  <img src="assets/screenshots/macbook-mockup.png" width="95%" alt="It's Time 在 MacBook Pro 硬件样机中的实机展示" />
 </div>
 
 ---
