@@ -12,6 +12,13 @@
 [![Swift](https://img.shields.io/badge/Language-Swift%205.9-orange?style=flat-square&logo=swift)](https://swift.org)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
+<br/>
+
+<p align="center">
+  <img src="assets/screenshots/macbook-mockup.png" width="60%" alt="MacBook 样机展示" style="vertical-align: middle; margin-right: 2%;" />
+  <img src="assets/screenshots/app-card-detail.png" width="28%" alt="主控制台近景" style="vertical-align: middle;" />
+</p>
+
 </div>
 
 ---
@@ -65,14 +72,6 @@
 
 **开机自启动**
 一键通过 `SMAppService` 注册为登录项，无需手动配置。
-
----
-
-## 界面预览
-
-<div align="center">
-  <img src="assets/screenshots/macbook-mockup.png" width="95%" alt="It's Time 在 MacBook Pro 硬件样机中的实机展示" />
-</div>
 
 ---
 
