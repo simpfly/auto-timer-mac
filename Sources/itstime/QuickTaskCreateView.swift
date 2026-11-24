@@ -368,7 +368,7 @@ struct QuickTaskCreateView: View {
                     
                     // 下拉卡片：处于透明背景上层，紧密咬合按钮底边展开，完全消除悬空缝隙，文字像素级对齐
                     actionKindDropdownList
-                        .offset(y: 22)
+                        .offset(y: 26)
                         .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
                 }
             }
@@ -420,11 +420,16 @@ struct QuickTaskCreateView: View {
                 .buttonStyle(.plain)
                 .onHover { isHovered in
                     hoveredActionKind = isHovered ? kind : nil
+                    if isHovered { NSCursor.arrow.set() }
                 }
             }
         }
         .padding(3)
         .frame(width: 80)
+        .contentShape(Rectangle())
+        .onHover { isHovered in
+            if isHovered { NSCursor.arrow.set() }
+        }
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color(NSColor.windowBackgroundColor))

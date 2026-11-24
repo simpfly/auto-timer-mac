@@ -297,7 +297,7 @@ struct CalendarSyncSheet: View {
                             .padding(.vertical, 4)
                             .background(Color.primary.opacity(0.06))
                             .clipShape(Capsule())
-                        } else if rem.hasSpecificTime && !rem.isOverdue {
+                        } else {
                             HStack(spacing: 6) {
                                 Button(action: {
                                     prefillReminder(rem)
@@ -314,25 +314,6 @@ struct CalendarSyncSheet: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.small)
-                            }
-                        } else {
-                            HStack(spacing: 6) {
-                                Button("转为 25m 专注") {
-                                    importReminderAsCountdown(rem, minutes: 25)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
-                                .help("直接转为 25 分钟倒计时专注计划")
-                                
-                                Button(action: {
-                                    prefillReminder(rem)
-                                }) {
-                                    Image(systemName: "square.and.pencil")
-                                        .font(.system(size: 11))
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .help("填入主输入框自定义时间")
                             }
                         }
                     }
@@ -377,14 +358,13 @@ struct CalendarSyncSheet: View {
         let comps = rem.dueDate.map { Calendar.current.dateComponents([.hour, .minute], from: $0) }
         let hour = rem.hasSpecificTime ? comps?.hour : nil
         let minute = rem.hasSpecificTime ? comps?.minute : nil
-        let countdown = rem.hasSpecificTime ? nil : 25
         
         eventKit.prefilledDraft = PrefilledTaskDraft(
             title: rem.title,
             targetURLString: rem.url?.absoluteString,
             targetHour: hour,
             targetMinute: minute,
-            suggestedCountdownMinutes: countdown,
+            suggestedCountdownMinutes: nil,
             isAllDay: !rem.hasSpecificTime
         )
         dismiss()
@@ -445,12 +425,17 @@ struct CalendarSyncSheet: View {
     }
     
     private func importReminder(_ rem: SystemReminderTask) {
-        guard let due = rem.dueDate, rem.hasSpecificTime, !rem.isOverdue else {
-            importReminderAsCountdown(rem, minutes: 25)
-            return
+        let trigger: TriggerType
+        let now = Date()
+        
+        if let due = rem.dueDate, rem.hasSpecificTime, !rem.isOverdue {
+            trigger = .once(due)
+        } else {
+            let hour = Calendar.current.component(.hour, from: now)
+            let defaultHour = (hour < 9) ? 9 : min(hour + 1, 23)
+            trigger = .daily(hour: defaultHour, minute: 0)
         }
         
-        let trigger = TriggerType.once(due)
         let action: ActionType
         if let url = rem.url {
             action = .openURL(urlString: url.absoluteString)
@@ -466,24 +451,6 @@ struct CalendarSyncSheet: View {
         )
         scheduler.addTask(task)
         showFeedback("已导入「\(rem.title)」")
-    }
-    
-    private func importReminderAsCountdown(_ rem: SystemReminderTask, minutes: Int) {
-        let action: ActionType
-        if let url = rem.url {
-            action = .openURL(urlString: url.absoluteString)
-        } else {
-            action = .none
-        }
-        
-        let task = ScheduleTask(
-            name: rem.title,
-            trigger: .countdown(totalSeconds: minutes * 60),
-            action: action,
-            isEnabled: true
-        )
-        scheduler.addTask(task)
-        showFeedback("已转为 \(minutes)m 专注计划「\(rem.title)」")
     }
     
     private func showFeedback(_ text: String) {

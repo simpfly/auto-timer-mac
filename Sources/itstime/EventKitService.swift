@@ -470,6 +470,10 @@ public final class EventKitService: ObservableObject {
         reminder.calendar = eventStore.defaultCalendarForNewReminders()
         reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: targetDate)
         
+        if case .openURL(let urlString) = task.action, let url = URL(string: urlString) {
+            reminder.url = url
+        }
+        
         do {
             try eventStore.save(reminder, commit: true)
             return true
