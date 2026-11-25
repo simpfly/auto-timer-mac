@@ -123,46 +123,19 @@ public struct ScreenTimeView: View {
         }
     }
     
-    // MARK: - 日期导航栏（全区域可点、消除图标穿透、保留 ‹ ● ›）
+    // MARK: - 日期导航栏（‹ [日期] › 左右对称布局，移除中间圆点）
     private var dateNavigationBar: some View {
-        HStack(spacing: 4) {
-            // 控制组：‹ ● ›（热区全面扩大至 28×26pt，带防穿透底色与 hover 确认反馈）
-            HStack(spacing: 2) {
-                // 上一周期 ‹
-                ScreenTimeIconButton(
-                    action: { tracker.goToPrevious() },
-                    systemName: "chevron.left",
-                    helpText: "上一周期",
-                    width: 28,
-                    height: 26
-                )
-                
-                // 回到今日圆点 ●（视觉 6pt，点击热区 26×26pt，杜绝点偏）
-                ScreenTimeIconButton(
-                    action: { tracker.goToToday() },
-                    customContent: AnyView(
-                        Circle()
-                            .fill(tracker.isCurrentPeriod ? Color.secondary.opacity(0.25) : Color.accentColor)
-                            .frame(width: 6, height: 6)
-                    ),
-                    helpText: "回到今日",
-                    isDisabled: tracker.isCurrentPeriod,
-                    width: 26,
-                    height: 26
-                )
-                
-                // 下一周期 ›（未来禁用）
-                ScreenTimeIconButton(
-                    action: { tracker.goToNext() },
-                    systemName: "chevron.right",
-                    helpText: "下一周期",
-                    isDisabled: !tracker.canGoNext,
-                    width: 28,
-                    height: 26
-                )
-            }
-            
+        HStack(spacing: 6) {
             Spacer()
+            
+            // 上一周期 ‹
+            ScreenTimeIconButton(
+                action: { tracker.goToPrevious() },
+                systemName: "chevron.left",
+                helpText: "上一周期",
+                width: 28,
+                height: 26
+            )
             
             // 居中日期展示（全胶囊区域响应点击，杜绝仅点文本的缺陷）
             DateCapsuleButton(
@@ -185,14 +158,17 @@ public struct ScreenTimeView: View {
                 )
             }
             
-            Spacer()
+            // 下一周期 ›（未来禁用）
+            ScreenTimeIconButton(
+                action: { tracker.goToNext() },
+                systemName: "chevron.right",
+                helpText: "下一周期",
+                isDisabled: !tracker.canGoNext,
+                width: 28,
+                height: 26
+            )
             
-            // 右侧平衡占位，确保绝对居中对称
-            HStack(spacing: 2) {
-                Color.clear.frame(width: 28, height: 26)
-                Color.clear.frame(width: 26, height: 26)
-                Color.clear.frame(width: 28, height: 26)
-            }
+            Spacer()
         }
     }
     
