@@ -269,7 +269,6 @@ struct ClockVisualizerView: View {
                     if let date = calendar.nextDate(after: now, matching: DateComponents(minute: minute, second: 0), matchingPolicy: .nextTime) { select(date) }
                 }
             })
-            .help("点击或拖动刻度设置任务时间")
 
         if let target {
             let minute = Calendar.current.component(.minute, from: target)
@@ -284,7 +283,7 @@ struct ClockVisualizerView: View {
                             .buttonStyle(.plain)
                             .focusable(false)
                             .accessibilityLabel(first.trigger.displayTitle)
-                            .help(first.trigger.displayTitle)
+                            .floatingTooltip(first.trigger.displayTitle)
                             .position(markerPoint(minute, radius))
                     } else {
                         Menu {

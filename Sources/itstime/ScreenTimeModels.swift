@@ -117,32 +117,62 @@ public struct PastEventLogItem: Identifiable, Codable, Equatable {
 public struct DailyScreenTimeRecord: Codable, Equatable {
     public let dateString: String // 格式: yyyy-MM-dd
     public var totalActiveSeconds: TimeInterval
+    public var totalIdleSeconds: TimeInterval
     public var appUsages: [String: AppUsageRecord] // Key 为 bundleIdentifier
     public var eventTriggers: [UUID: EventTriggerRecord] // Key 为 Task UUID
     public var pastEventLogs: [PastEventLogItem]? // 触发历史流水日志
     
+    enum CodingKeys: String, CodingKey {
+        case dateString, totalActiveSeconds, totalIdleSeconds, appUsages, eventTriggers, pastEventLogs
+    }
+    
     public init(
         dateString: String,
         totalActiveSeconds: TimeInterval = 0,
+        totalIdleSeconds: TimeInterval = 0,
         appUsages: [String: AppUsageRecord] = [:],
         eventTriggers: [UUID: EventTriggerRecord] = [:],
         pastEventLogs: [PastEventLogItem] = []
     ) {
         self.dateString = dateString
         self.totalActiveSeconds = totalActiveSeconds
+        self.totalIdleSeconds = totalIdleSeconds
         self.appUsages = appUsages
         self.eventTriggers = eventTriggers
         self.pastEventLogs = pastEventLogs
     }
     
-    /// 按使用时长倒序排列的应用记录列表
-    public var sortedApps: [AppUsageRecord] {
-        appUsages.values.sorted { $0.durationSeconds > $1.durationSeconds }
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dateString = try container.decode(String.self, forKey: .dateString)
+        totalActiveSeconds = try container.decode(TimeInterval.self, forKey: .totalActiveSeconds)
+        totalIdleSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .totalIdleSeconds) ?? 0
+        appUsages = try container.decode([String: AppUsageRecord].self, forKey: .appUsages)
+        eventTriggers = try container.decode([UUID: EventTriggerRecord].self, forKey: .eventTriggers)
+        pastEventLogs = try container.decodeIfPresent([PastEventLogItem].self, forKey: .pastEventLogs)
     }
     
-    /// 按触发次数倒序排列的事件列表
+    /// 按使用时长倒序排列的应用记录列表（带稳定兜底排序）
+    public var sortedApps: [AppUsageRecord] {
+        appUsages.values.sorted {
+            if $0.durationSeconds != $1.durationSeconds {
+                return $0.durationSeconds > $1.durationSeconds
+            }
+            return $0.bundleIdentifier < $1.bundleIdentifier
+        }
+    }
+    
+    /// 按触发次数倒序排列的事件列表（带稳定兜底排序）
     public var sortedEventTriggers: [EventTriggerRecord] {
-        eventTriggers.values.sorted { $0.count > $1.count }
+        eventTriggers.values.sorted {
+            if $0.count != $1.count {
+                return $0.count > $1.count
+            }
+            if $0.lastTriggeredAt != $1.lastTriggeredAt {
+                return $0.lastTriggeredAt > $1.lastTriggeredAt
+            }
+            return $0.id.uuidString < $1.id.uuidString
+        }
     }
     
     /// 今日所有事件累计触发的总次数
@@ -166,51 +196,104 @@ public struct DailyScreenTimeRecord: Codable, Equatable {
     }
 }
 
+/// 柱状图单个时间桶（天或月）统计数据
+public struct ScreenTimeBucket: Identifiable, Equatable {
+    public let id: String
+    public let label: String
+    public let fullLabel: String
+    public let durationSeconds: TimeInterval
+    public let date: Date
+    
+    public init(
+        id: String,
+        label: String,
+        fullLabel: String,
+        durationSeconds: TimeInterval,
+        date: Date
+    ) {
+        self.id = id
+        self.label = label
+        self.fullLabel = fullLabel
+        self.durationSeconds = durationSeconds
+        self.date = date
+    }
+    
+    public var formattedDuration: String {
+        let total = Int(durationSeconds)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else if minutes > 0 {
+            return "\(minutes)m"
+        } else if seconds > 0 {
+            return "\(seconds)s"
+        } else {
+            return "0m"
+        }
+    }
+}
+
 /// 某个时间跨度（日/周/月/年）聚合统计结果
 public struct AggregatedScreenTimeStats: Equatable {
     public var scope: TimeScope
     public var totalActiveSeconds: TimeInterval
+    public var totalIdleSeconds: TimeInterval
     public var sortedApps: [AppUsageRecord]
     public var sortedEventTriggers: [EventTriggerRecord]
     public var totalEventTriggerCount: Int
     public var periodDescription: String
     public var dailyAverageSeconds: TimeInterval
     public var pastEventLogs: [PastEventLogItem]
+    public var buckets: [ScreenTimeBucket]
     
     public init(
         scope: TimeScope,
         totalActiveSeconds: TimeInterval = 0,
+        totalIdleSeconds: TimeInterval = 0,
         sortedApps: [AppUsageRecord] = [],
         sortedEventTriggers: [EventTriggerRecord] = [],
         totalEventTriggerCount: Int = 0,
         periodDescription: String = "",
         dailyAverageSeconds: TimeInterval = 0,
-        pastEventLogs: [PastEventLogItem] = []
+        pastEventLogs: [PastEventLogItem] = [],
+        buckets: [ScreenTimeBucket] = []
     ) {
         self.scope = scope
         self.totalActiveSeconds = totalActiveSeconds
+        self.totalIdleSeconds = totalIdleSeconds
         self.sortedApps = sortedApps
         self.sortedEventTriggers = sortedEventTriggers
         self.totalEventTriggerCount = totalEventTriggerCount
         self.periodDescription = periodDescription
         self.dailyAverageSeconds = dailyAverageSeconds
         self.pastEventLogs = pastEventLogs
+        self.buckets = buckets
+    }
+    
+    public var totalScreenOnSeconds: TimeInterval {
+        totalActiveSeconds + totalIdleSeconds
     }
     
     public var formattedTotalDuration: String {
-        let total = Int(totalActiveSeconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        } else {
-            return "\(minutes)m"
-        }
+        Self.formatCompactDuration(totalActiveSeconds)
+    }
+    
+    public var formattedTotalScreenOnDuration: String {
+        Self.formatCompactDuration(totalScreenOnSeconds)
+    }
+    
+    public var formattedTotalIdleDuration: String {
+        Self.formatCompactDuration(totalIdleSeconds)
     }
     
     public var formattedDailyAverage: String {
-        let total = Int(dailyAverageSeconds)
+        Self.formatCompactDuration(dailyAverageSeconds)
+    }
+    
+    private static func formatCompactDuration(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds)
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         if hours > 0 {

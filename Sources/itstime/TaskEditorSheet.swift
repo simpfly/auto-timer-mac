@@ -217,7 +217,7 @@ struct TaskEditorSheet: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help("关闭 (Esc)")
+                    .floatingTooltip("关闭 (Esc)")
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 16)
@@ -454,7 +454,7 @@ struct TaskEditorSheet: View {
                         .glassPanel(cornerRadius: 7)
                 }
                 .buttonStyle(.plain)
-                .help("减少 5 分钟")
+                .floatingTooltip("减少 5 分钟")
                 
                 Button(action: { adjustCountdownMinutes(by: -1) }) {
                     Image(systemName: "minus")
@@ -464,7 +464,7 @@ struct TaskEditorSheet: View {
                         .glassPanel(cornerRadius: 7)
                 }
                 .buttonStyle(.plain)
-                .help("减少 1 分钟")
+                .floatingTooltip("减少 1 分钟")
                 
                 // 大字号时间展示
                 HStack(spacing: 2) {
@@ -488,7 +488,7 @@ struct TaskEditorSheet: View {
                         .glassPanel(cornerRadius: 7)
                 }
                 .buttonStyle(.plain)
-                .help("增加 1 分钟")
+                .floatingTooltip("增加 1 分钟")
                 
                 Button(action: { adjustCountdownMinutes(by: 5) }) {
                     Text("+5m")
@@ -498,7 +498,7 @@ struct TaskEditorSheet: View {
                         .glassPanel(cornerRadius: 7)
                 }
                 .buttonStyle(.plain)
-                .help("增加 5 分钟")
+                .floatingTooltip("增加 5 分钟")
                 
                 Spacer()
             }
@@ -589,7 +589,7 @@ struct TaskEditorSheet: View {
                         .glassPanel(cornerRadius: 7)
                 }
                 .buttonStyle(.plain)
-                .help("减少 10 秒")
+                .floatingTooltip("减少 10 秒")
                 
                 Button(action: { adjustInterval(by: -60) }) {
                     Text("-1m")
@@ -599,7 +599,7 @@ struct TaskEditorSheet: View {
                         .glassPanel(cornerRadius: 7)
                 }
                 .buttonStyle(.plain)
-                .help("减少 1 分钟")
+                .floatingTooltip("减少 1 分钟")
                 
                 // 大字号时间展示
                 HStack(spacing: 2) {
@@ -623,7 +623,7 @@ struct TaskEditorSheet: View {
                         .glassPanel(cornerRadius: 7)
                 }
                 .buttonStyle(.plain)
-                .help("增加 1 分钟")
+                .floatingTooltip("增加 1 分钟")
                 
                 Button(action: { adjustInterval(by: 10) }) {
                     Text("+10s")
@@ -633,7 +633,7 @@ struct TaskEditorSheet: View {
                         .glassPanel(cornerRadius: 7)
                 }
                 .buttonStyle(.plain)
-                .help("增加 10 秒")
+                .floatingTooltip("增加 10 秒")
                 
                 Spacer()
             }

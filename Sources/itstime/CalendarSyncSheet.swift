@@ -225,7 +225,7 @@ struct CalendarSyncSheet: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
-                                .help("填入输入框微调")
+                                .floatingTooltip("填入输入框微调")
                                 
                                 Button("+ 导入") {
                                     importCalendarEvent(ev)
@@ -303,7 +303,7 @@ struct CalendarSyncSheet: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
-                                .help("填入输入框微调")
+                                .floatingTooltip("填入输入框微调")
                                 
                                 Button("+ 导入") {
                                     importReminder(rem)

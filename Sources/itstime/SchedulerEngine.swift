@@ -669,14 +669,16 @@ public final class SchedulerEngine: ObservableObject {
         self.pendingAudioAlert = nil
     }
     
-    /// 执行动作
-    public func executeAction(for task: ScheduleTask) {
-        // 1. 统计事件触发次数（单任务累计与今日屏幕统计服务记录）
-        if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks[idx].triggerCount = tasks[idx].effectiveTriggerCount + 1
-            saveTasks()
+    /// 执行动作（手动测试运行时不计入正式触发统计）
+    public func executeAction(for task: ScheduleTask, isManualTest: Bool = false) {
+        // 1. 仅正式调度触发时计入统计与历史时间轴
+        if !isManualTest {
+            if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
+                tasks[idx].triggerCount = tasks[idx].effectiveTriggerCount + 1
+                saveTasks()
+            }
+            ScreenTimeTrackerService.shared.recordEventTrigger(for: task)
         }
-        ScreenTimeTrackerService.shared.recordEventTrigger(for: task)
         
         // 2. 执行具体动作
         switch task.action {

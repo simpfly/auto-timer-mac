@@ -224,4 +224,99 @@ final class ScreenTimeTrackerTests: XCTestCase {
         XCTAssertEqual(stats.pastEventLogs[1].taskName, "团队站会")
         XCTAssertEqual(stats.pastEventLogs[1].kindString, "daily")
     }
+    
+    @MainActor
+    func testScopeBucketsGeneration() {
+        let tracker = ScreenTimeTrackerService.shared
+        tracker.clearTodayData()
+        tracker.goToToday()
+        tracker.recordAppUsageForTesting(bundleId: "com.apple.dt.Xcode", appName: "Xcode", duration: 3600)
+        
+        let dayStats = tracker.calculateStats(for: .day)
+        XCTAssertTrue(dayStats.buckets.isEmpty)
+        
+        let weekStats = tracker.calculateStats(for: .week)
+        XCTAssertEqual(weekStats.buckets.count, 7)
+        XCTAssertEqual(weekStats.buckets.reduce(0) { $0 + $1.durationSeconds }, weekStats.totalActiveSeconds, accuracy: 0.01)
+        
+        let monthStats = tracker.calculateStats(for: .month)
+        let daysInMonth = Calendar.current.range(of: .day, in: .month, for: Date())?.count ?? 30
+        XCTAssertEqual(monthStats.buckets.count, daysInMonth)
+        XCTAssertEqual(monthStats.buckets.reduce(0) { $0 + $1.durationSeconds }, monthStats.totalActiveSeconds, accuracy: 0.01)
+        
+        let yearStats = tracker.calculateStats(for: .year)
+        XCTAssertEqual(yearStats.buckets.count, 12)
+        XCTAssertEqual(yearStats.buckets.reduce(0) { $0 + $1.durationSeconds }, yearStats.totalActiveSeconds, accuracy: 0.01)
+    }
+    
+    @MainActor
+    func testAudioPlaybackPreventsIdleAndAccumulatesActiveTime() {
+        let tracker = ScreenTimeTrackerService.shared
+        tracker.clearTodayData()
+        tracker.isTrackingEnabled = true
+        tracker.recordAppUsageForTesting(bundleId: "com.apple.Safari", appName: "Safari", duration: 0, activations: 1)
+        
+        let baseDate = Date()
+        tracker.lastActiveTimestamp = baseDate.addingTimeInterval(-10)
+        
+        // 无操作超过 300s，但扬声器正在播放 → 应保持活跃，计入活跃时长
+        tracker.processHeartbeat(idleSeconds: 400, isPlayingAudio: true, now: baseDate)
+        XCTAssertFalse(tracker.isUserIdle)
+        XCTAssertEqual(tracker.todayTotalSeconds, 10, accuracy: 0.1)
+        XCTAssertEqual(tracker.todayIdleSeconds, 0, accuracy: 0.1)
+        
+        // 停止播放且无操作超过 300s → 应进入闲置，计入亮屏闲置时长
+        tracker.lastActiveTimestamp = baseDate
+        tracker.processHeartbeat(idleSeconds: 400, isPlayingAudio: false, now: baseDate.addingTimeInterval(15))
+        XCTAssertTrue(tracker.isUserIdle)
+        XCTAssertEqual(tracker.todayTotalSeconds, 10, accuracy: 0.1)
+        XCTAssertEqual(tracker.todayIdleSeconds, 15, accuracy: 0.1)
+        XCTAssertEqual(tracker.calculateStats(for: .day).totalIdleSeconds, 15, accuracy: 0.1)
+    }
+    
+    func testLegacyDailyRecordDecodingWithoutIdleSeconds() throws {
+        let legacyJSON = """
+        {
+            "dateString": "2026-11-20",
+            "totalActiveSeconds": 1200,
+            "appUsages": {},
+            "eventTriggers": []
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(DailyScreenTimeRecord.self, from: legacyJSON)
+        XCTAssertEqual(decoded.totalActiveSeconds, 1200)
+        XCTAssertEqual(decoded.totalIdleSeconds, 0)
+    }
+    
+    @MainActor
+    func testSkipPreAlertAndManualTestDoNotRecordTrigger() {
+        let tracker = ScreenTimeTrackerService.shared
+        let engine = SchedulerEngine.shared
+        tracker.clearTodayData()
+        
+        let taskId = UUID()
+        let task = ScheduleTask(
+            id: taskId,
+            name: "测试护眼",
+            trigger: .interval(intervalSeconds: 2700),
+            action: .none,
+            triggerCount: 0
+        )
+        engine.tasks.append(task)
+        
+        // 1. 预告卡片点击【不播放】不应记录触发次数与日志
+        engine.startAudioPreAlert(for: task)
+        engine.skipAudioPreAlert()
+        XCTAssertEqual(tracker.todayTotalEventTriggerCount, 0)
+        XCTAssertTrue(tracker.currentStats.pastEventLogs.isEmpty)
+        XCTAssertEqual(engine.tasks.first(where: { $0.id == taskId })?.effectiveTriggerCount, 0)
+        
+        // 2. 卡片点击【测试运行】不应记录正式触发次数与日志
+        engine.executeAction(for: task, isManualTest: true)
+        XCTAssertEqual(tracker.todayTotalEventTriggerCount, 0)
+        XCTAssertTrue(tracker.currentStats.pastEventLogs.isEmpty)
+        XCTAssertEqual(engine.tasks.first(where: { $0.id == taskId })?.effectiveTriggerCount, 0)
+        
+        engine.tasks.removeAll(where: { $0.id == taskId })
+    }
 }

@@ -200,7 +200,7 @@ struct QuickTaskCreateView: View {
                     }
                     .buttonStyle(.plain)
                     .fixedSize()
-                    .help(editingTask != nil ? "保存修改" : "立即创建并启动")
+                    .floatingTooltip(editingTask != nil ? "保存修改" : "立即创建并启动")
                     
                     // 若处于就地编辑模式，展示取消按钮 (纯图标极简呈现，统一 30x30 尺寸)
                     if editingTask != nil {
@@ -214,7 +214,7 @@ struct QuickTaskCreateView: View {
                         }
                         .buttonStyle(.plain)
                         .fixedSize()
-                        .help("取消修改")
+                        .floatingTooltip("取消修改")
                     }
                 }
             
@@ -374,7 +374,6 @@ struct QuickTaskCreateView: View {
             }
         }
         .zIndex(500)
-        .help("选择到期提醒动作")
     }
     
     // MARK: - 提醒方式展开列表（与按钮 80pt 严丝合缝，文字基准线垂直严格对齐，零挤压）
@@ -850,7 +849,7 @@ struct QuickTaskCreateView: View {
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .help(isCurrentAudioPlaying ? "停止播放" : (isAudioFileMissing ? "音频文件已丢失" : "试听音频"))
+                        .floatingTooltip(isCurrentAudioPlaying ? "停止播放" : (isAudioFileMissing ? "音频文件已丢失" : "试听音频"))
                         
                         Spacer()
                         
@@ -1421,7 +1420,7 @@ private struct ContinuousPressButton: View {
             .foregroundColor(.primary.opacity(pressState.isPressing ? 0.95 : 0.65))
             .frame(width: size, height: size)
             .contentShape(Rectangle())
-            .help(helpText)
+            .floatingTooltip(helpText)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in

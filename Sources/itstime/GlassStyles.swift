@@ -86,6 +86,33 @@ public extension View {
             )
     }
     
+    /// 统一桌面提醒浮窗 HUD 容器规范（毛玻璃材质、渐变描边、柔和投影）
+    func glassHUD(cornerRadius: CGFloat = 16, accentColor: Color? = nil) -> some View {
+        self
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                (accentColor ?? Color.white).opacity(accentColor != nil ? 0.32 : 0.28),
+                                Color.primary.opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.9
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.18), radius: 20, x: 0, y: 10)
+    }
+    
+    /// 轻量即时毛玻璃悬浮提示（替代系统原生延迟 .help）
+    func floatingTooltip(_ text: String) -> some View {
+        self.modifier(FloatingTooltipModifier(text: text))
+    }
+    
     /// 全局禁用 SwiftUI 焦点框及动效
     @ViewBuilder
     func disableFocusEffect() -> some View {
@@ -94,5 +121,124 @@ public extension View {
         } else {
             self
         }
+    }
+}
+
+// MARK: - 轻量即时毛玻璃悬浮提示控制器（独立无焦点浮层，不被 ScrollView 裁切）
+@MainActor
+private final class FloatingTooltipController {
+    static let shared = FloatingTooltipController()
+    
+    private var panel: NSPanel?
+    private var showWorkItem: DispatchWorkItem?
+    private var activeId: UUID?
+    
+    func scheduleShow(id: UUID, text: String, delay: TimeInterval = 0.65) {
+        guard !text.isEmpty else { return }
+        showWorkItem?.cancel()
+        activeId = id
+        
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.activeId == id else { return }
+            self.present(text: text)
+        }
+        showWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+    
+    func hide(id: UUID) {
+        guard activeId == id else { return }
+        showWorkItem?.cancel()
+        showWorkItem = nil
+        activeId = nil
+        panel?.orderOut(nil)
+    }
+    
+    private func present(text: String) {
+        let contentView = TooltipBubbleContent(text: text)
+        let hosting = NSHostingView(rootView: contentView)
+        let fittingSize = hosting.fittingSize
+        
+        let panel = self.panel ?? {
+            let p = NSPanel(
+                contentRect: NSRect(origin: .zero, size: fittingSize),
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            p.level = .popUpMenu
+            p.backgroundColor = .clear
+            p.isOpaque = false
+            p.hasShadow = false
+            p.ignoresMouseEvents = true
+            p.collectionBehavior = [.canJoinAllSpaces, .transient]
+            self.panel = p
+            return p
+        }()
+        
+        panel.contentView = hosting
+        
+        // 定位在鼠标指针上方居中（若靠近屏幕顶部则自动翻折到下方）
+        let mouse = NSEvent.mouseLocation
+        let screenFrame = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) })?.visibleFrame
+            ?? NSScreen.main?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        
+        var x = mouse.x - fittingSize.width / 2
+        x = max(screenFrame.minX + 8, min(x, screenFrame.maxX - fittingSize.width - 8))
+        
+        var y = mouse.y + 18
+        if y + fittingSize.height > screenFrame.maxY - 6 {
+            y = mouse.y - fittingSize.height - 14
+        }
+        
+        panel.setFrame(NSRect(x: x, y: y, width: fittingSize.width, height: fittingSize.height), display: true)
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.12
+            panel.animator().alphaValue = 1
+        }
+    }
+}
+
+private struct TooltipBubbleContent: View {
+    let text: String
+    
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.primary)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 0.75)
+            )
+            .shadow(color: Color.black.opacity(0.14), radius: 8, x: 0, y: 3)
+            .padding(6) // 给阴影留出渲染空间，避免被浮窗边缘裁切
+    }
+}
+
+private struct FloatingTooltipModifier: ViewModifier {
+    let text: String
+    @State private var tooltipId = UUID()
+    
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                if hovering {
+                    FloatingTooltipController.shared.scheduleShow(id: tooltipId, text: text)
+                } else {
+                    FloatingTooltipController.shared.hide(id: tooltipId)
+                }
+            }
+            .onDisappear {
+                FloatingTooltipController.shared.hide(id: tooltipId)
+            }
     }
 }

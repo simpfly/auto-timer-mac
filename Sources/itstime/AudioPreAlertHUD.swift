@@ -190,14 +190,9 @@ struct AudioPreAlertCardView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .padding(14)
-            .frame(width: 290, height: 148)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.orange.opacity(0.25), lineWidth: 1)
-            )
+            .padding(16)
+            .frame(width: 296, height: 152)
+            .glassHUD(cornerRadius: 16, accentColor: .orange)
         } else {
             EmptyView()
         }

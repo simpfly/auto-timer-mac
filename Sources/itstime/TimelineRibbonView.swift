@@ -214,7 +214,7 @@ struct EventNodeView: View {
                 .stroke(isHovered ? Color.accentColor : Color.white.opacity(0.2), lineWidth: 0.8)
         )
         .shadow(color: isHovered ? Color.accentColor.opacity(0.3) : Color.black.opacity(0.06), radius: isHovered ? 6 : 2)
-        .help("【\(event.task.name)】将于 \(event.formattedTime) (\(event.formattedCountdown)) 触发")
+        .floatingTooltip("【\(event.task.name)】将于 \(event.formattedTime) (\(event.formattedCountdown)) 触发")
     }
     
     private var pinLine: some View {

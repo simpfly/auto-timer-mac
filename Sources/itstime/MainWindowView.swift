@@ -60,7 +60,7 @@ struct MainWindowView: View {
                 .transition(.opacity)
             } else {
                 VStack(spacing: 0) {
-                    // 顶栏：极简通透
+                    // 顶栏：极简通透（与系统红绿灯处于同一水平线）
                     headerBar
                     
                     // 任务列表主区域（三级明确视觉层次）
@@ -90,11 +90,17 @@ struct MainWindowView: View {
                         } else if activeCountdownTasks.isEmpty && scheduler.tasks.isEmpty {
                             emptyStateView
                         }
+                        
+                        // 4. 屏幕时间与事件概览（与菜单栏共用同一组件）
+                        ScreenTimeSummaryCard {
+                            currentPage = .screenTime
+                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.bottom, 32)
                 }
             }
+            .ignoresSafeArea(.container, edges: .top)
             }
             
             // 轻量 Toast 提示
@@ -138,72 +144,37 @@ struct MainWindowView: View {
     // MARK: - 顶栏 (底层左右锚定 + 中间 HUD 绝对居中层叠，彻底杜绝标题被挤压加宽/弹动)
     private var headerBar: some View {
         HStack(alignment: .center) {
-            // 左侧：红绿灯安全留白与主标题
+            // 左侧：红绿灯安全留白与品牌标题
             HStack(spacing: 8) {
                 Spacer()
                     .frame(width: 70)
                 
-                Text("任务")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary.opacity(0.85))
+                BrandTitleView()
             }
             .fixedSize()
             
             Spacer()
             
-            // 右侧：更多功能菜单与日历联动入口
-            HStack(spacing: 10) {
-                Menu {
-                    Button {
-                        currentPage = .screenTime
-                    } label: {
-                        Label("屏幕时间与事件统计", systemImage: "hourglass")
-                    }
-                    
-                    Button {
-                        showingCalendarSync = true
-                    } label: {
-                        Label("日历与提醒事项", systemImage: "calendar.badge.clock")
-                    }
-                    
-                    Divider()
-                    
-                    Button {
-                        updateManager.checkForUpdates(userInitiated: true)
-                    } label: {
-                        Label("检查更新...", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.primary)
-                        .frame(width: 28, height: 28)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .focusable(false)
-                .help("更多功能")
-                
-                Button(action: {
-                    showingCalendarSync = true
-                }) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .frame(width: 28, height: 28)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help("日历与提醒事项")
+            // 右侧：更多功能菜单（与菜单栏功能完全一致）
+            Menu {
+                SharedMoreMenuContent(
+                    showOpenMainWindow: false,
+                    onOpenScreenTime: { currentPage = .screenTime },
+                    onOpenCalendarSync: { showingCalendarSync = true }
+                )
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.primary)
+                    .frame(width: 28, height: 28)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
+            .focusable(false)
         }
         .frame(height: 28)
         .overlay(
@@ -216,8 +187,8 @@ struct MainWindowView: View {
             alignment: .center
         )
         .padding(.horizontal, 24)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
     }
     
     // MARK: - 单卡片复用构建
@@ -236,7 +207,7 @@ struct MainWindowView: View {
                 scheduler.resetCountdown(id: task.id)
             },
             onExecuteNow: {
-                scheduler.executeAction(for: task)
+                scheduler.executeAction(for: task, isManualTest: true)
             },
             onEdit: {
                 editingTask = task
@@ -291,7 +262,7 @@ struct MainWindowView: View {
             }
             .buttonStyle(.plain)
             .focusable(false)
-            .help("停止")
+            .floatingTooltip("停止")
         }
         .padding(.horizontal, 9)
         .frame(height: 26)
@@ -360,7 +331,6 @@ struct CompactGreenSwitch: View {
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.16), value: isOn)
-        .help(isOn ? "点击停用" : "点击启用")
         .accessibilityLabel(isOn ? "已启用" : "已停用")
     }
 }
@@ -410,7 +380,6 @@ struct TaskCardView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.primary)
                     .lineLimit(2)
-                    .help(task.name)
                 
                 if !actionBriefDescription.isEmpty {
                     HStack(spacing: 4) {
@@ -458,7 +427,7 @@ struct TaskCardView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help(task.isPaused ? "继续" : "暂停")
+                    .floatingTooltip(task.isPaused ? "继续" : "暂停")
                     
                     Button(action: onResetCountdown) {
                         Image(systemName: "arrow.counterclockwise")
@@ -469,7 +438,7 @@ struct TaskCardView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help("重置倒计时")
+                    .floatingTooltip("重置倒计时")
                     
                     Button(action: onDelete) {
                         Image(systemName: "trash")
@@ -480,7 +449,7 @@ struct TaskCardView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help("删除倒计时")
+                    .floatingTooltip("删除倒计时")
                 }
             }
         }
@@ -502,7 +471,6 @@ struct TaskCardView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
                         .lineLimit(1)
-                        .help(task.name)
                     
                     triggerBadge
                     
@@ -566,7 +534,7 @@ struct TaskCardView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help(isPlayingCurrentTaskAudio ? "停止播放" : "测试运行")
+                    .floatingTooltip(isPlayingCurrentTaskAudio ? "停止播放" : "测试运行")
                     
                     Button(action: onEdit) {
                         Image(systemName: "pencil")
@@ -577,7 +545,7 @@ struct TaskCardView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help("编辑")
+                    .floatingTooltip("编辑")
                     
                     Button(action: onDelete) {
                         Image(systemName: "trash")
@@ -588,7 +556,7 @@ struct TaskCardView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help("删除")
+                    .floatingTooltip("删除")
                 }
                 .opacity(isHovered ? 1.0 : 0.45)
             }

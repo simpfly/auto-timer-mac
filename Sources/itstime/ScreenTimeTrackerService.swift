@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import Combine
 import CoreGraphics
+import CoreAudio
 
 @MainActor
 public final class ScreenTimeTrackerService: ObservableObject {
@@ -22,6 +23,8 @@ public final class ScreenTimeTrackerService: ObservableObject {
     // MARK: - 发布的响应式状态
     /// 今日总活跃屏幕时长（秒）
     @Published public private(set) var todayTotalSeconds: TimeInterval = 0
+    /// 今日亮屏闲置时长（秒）
+    @Published public private(set) var todayIdleSeconds: TimeInterval = 0
     
     /// 当前选中的时间统计维度（日 / 周 / 月 / 年）
     @Published public var selectedScope: TimeScope = .day {
@@ -83,8 +86,11 @@ public final class ScreenTimeTrackerService: ObservableObject {
     private var observers: [NSObjectProtocol] = []
     
     /// 上次有效计算的时间戳（基于时间差 Delta 准确计算，杜绝单秒 Tick 唤醒能耗）
-    private var lastActiveTimestamp: Date = Date()
+    internal var lastActiveTimestamp: Date = Date()
     private var lastSaveDate: Date = Date()
+    
+    /// 供测试注入的扬声器活跃状态覆盖
+    internal var isAudioOutputActiveOverride: (() -> Bool)?
     
     private var isScreenAsleep: Bool = false
     private var isScreenLocked: Bool = false
@@ -127,9 +133,11 @@ public final class ScreenTimeTrackerService: ObservableObject {
     
     // MARK: - 能耗优化：智能心跳定时器控制
     /// 启动低频心跳定时器（5秒间隔，带 1.0 秒系统合流容差，大幅减少 CPU 唤醒）
-    private func startTrackingTimer(interval: TimeInterval? = nil) {
+    private func startTrackingTimer(interval: TimeInterval? = nil, resetTimestamp: Bool = true) {
         stopTrackingTimer()
-        lastActiveTimestamp = Date()
+        if resetTimestamp {
+            lastActiveTimestamp = Date()
+        }
         let heartbeat = interval ?? Self.activeHeartbeatInterval
         
         let timer = Timer(timeInterval: heartbeat, repeats: true) { [weak self] _ in
@@ -274,24 +282,9 @@ public final class ScreenTimeTrackerService: ObservableObject {
         guard isTrackingEnabled else { return }
         checkDateRollOver()
         
-        // 检查系统闲置秒数
         let idleSeconds = getSystemIdleSeconds()
-        let wasIdle = isUserIdle
-        isUserIdle = idleSeconds >= Self.idleThresholdSeconds
-        
-        // 闲置状态自适应降频调度
-        if isUserIdle != wasIdle {
-            startTrackingTimer(interval: isUserIdle ? Self.idleHeartbeatInterval : Self.activeHeartbeatInterval)
-        }
-        
-        updatePausedState()
-        
-        // 活跃时结算时间增量
-        if !isScreenOrSessionLocked && !isUserIdle {
-            commitDeltaDuration()
-        } else {
-            lastActiveTimestamp = Date()
-        }
+        let isPlayingAudio = isAudioOutputActiveOverride?() ?? isAudioOutputActive()
+        processHeartbeat(idleSeconds: idleSeconds, isPlayingAudio: isPlayingAudio)
         
         // 批量防抖持久化（每 60 秒刷盘一次，大幅减少磁盘 I/O）
         if Date().timeIntervalSince(lastSaveDate) >= 60.0 {
@@ -299,14 +292,46 @@ public final class ScreenTimeTrackerService: ObservableObject {
         }
     }
     
-    /// 将上次计算至今的时间差（Delta）结算给当前活跃应用
-    private func commitDeltaDuration() {
-        let now = Date()
+    /// 根据无操作秒数与扬声器状态更新活跃/闲置状态并结算时间增量
+    internal func processHeartbeat(idleSeconds: TimeInterval, isPlayingAudio: Bool, now: Date = Date()) {
+        guard isTrackingEnabled else { return }
+        let wasIdle = isUserIdle
+        // 正在通过扬声器播放音视频时，视为活跃状态，不判定为闲置
+        isUserIdle = (idleSeconds >= Self.idleThresholdSeconds) && !isPlayingAudio
+        
+        // 闲置状态自适应降频调度（保留当前时间戳，不丢失切换瞬间的差值）
+        if isUserIdle != wasIdle {
+            startTrackingTimer(
+                interval: isUserIdle ? Self.idleHeartbeatInterval : Self.activeHeartbeatInterval,
+                resetTimestamp: false
+            )
+        }
+        
+        updatePausedState()
+        
+        if !isScreenOrSessionLocked {
+            if !isUserIdle {
+                commitDeltaDuration(now: now)
+            } else {
+                commitIdleDeltaDuration(now: now)
+            }
+        } else {
+            lastActiveTimestamp = now
+        }
+    }
+    
+    /// 计算并消费自上次结算以来的有效时间差（过滤异常跳跃）
+    private func consumeValidDelta(now: Date = Date()) -> TimeInterval? {
         let delta = now.timeIntervalSince(lastActiveTimestamp)
         lastActiveTimestamp = now
-        
         // 容错：增量小于 0.1 秒或大于 60 秒（如休眠唤醒缝隙），安全忽略
-        guard delta >= 0.1 && delta <= 60.0 else { return }
+        guard delta >= 0.1 && delta <= 60.0 else { return nil }
+        return delta
+    }
+    
+    /// 将上次计算至今的时间差（Delta）结算给当前活跃应用
+    private func commitDeltaDuration(now: Date = Date()) {
+        guard let delta = consumeValidDelta(now: now) else { return }
         guard !isScreenOrSessionLocked && !isUserIdle && isTrackingEnabled else { return }
         
         if currentForegroundApp == nil {
@@ -333,6 +358,58 @@ public final class ScreenTimeTrackerService: ObservableObject {
         if selectedScope == .day {
             refreshStats()
         }
+    }
+    
+    /// 将亮屏但无操作的闲置时间结算给今日亮屏闲置时长
+    private func commitIdleDeltaDuration(now: Date = Date()) {
+        guard let delta = consumeValidDelta(now: now) else { return }
+        guard !isScreenOrSessionLocked && isUserIdle && isTrackingEnabled else { return }
+        
+        todayRecord.totalIdleSeconds += delta
+        todayIdleSeconds = todayRecord.totalIdleSeconds
+        
+        if selectedScope == .day {
+            refreshStats()
+        }
+    }
+    
+    /// 查询默认音频输出设备（扬声器/耳机）是否正在播放音频
+    public func isAudioOutputActive() -> Bool {
+        var deviceID = AudioObjectID(kAudioObjectUnknown)
+        var deviceSize = UInt32(MemoryLayout<AudioObjectID>.size)
+        var defaultDeviceAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &defaultDeviceAddress,
+            0,
+            nil,
+            &deviceSize,
+            &deviceID
+        )
+        guard status == noErr, deviceID != AudioObjectID(kAudioObjectUnknown) else {
+            return false
+        }
+        
+        var isRunning: UInt32 = 0
+        var runningSize = UInt32(MemoryLayout<UInt32>.size)
+        var runningAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let runningStatus = AudioObjectGetPropertyData(
+            deviceID,
+            &runningAddress,
+            0,
+            nil,
+            &runningSize,
+            &isRunning
+        )
+        return runningStatus == noErr && isRunning != 0
     }
     
     public func getSystemIdleSeconds() -> TimeInterval {
@@ -629,6 +706,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
                 return AggregatedScreenTimeStats(
                     scope: .day,
                     totalActiveSeconds: todayRecord.totalActiveSeconds,
+                    totalIdleSeconds: todayRecord.totalIdleSeconds,
                     sortedApps: todayRecord.sortedApps,
                     sortedEventTriggers: todayRecord.sortedEventTriggers,
                     totalEventTriggerCount: todayRecord.totalEventTriggerCount,
@@ -642,6 +720,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
                     return AggregatedScreenTimeStats(
                         scope: .day,
                         totalActiveSeconds: record.totalActiveSeconds,
+                        totalIdleSeconds: record.totalIdleSeconds,
                         sortedApps: record.sortedApps,
                         sortedEventTriggers: record.sortedEventTriggers,
                         totalEventTriggerCount: record.totalEventTriggerCount,
@@ -653,6 +732,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
                     return AggregatedScreenTimeStats(
                         scope: .day,
                         totalActiveSeconds: 0,
+                        totalIdleSeconds: 0,
                         sortedApps: [],
                         sortedEventTriggers: [],
                         totalEventTriggerCount: 0,
@@ -671,7 +751,8 @@ public final class ScreenTimeTrackerService: ObservableObject {
             let effectiveEnd = min(endOfWeek, now)
             let dates = getDatesBetween(start: startOfWeek, end: effectiveEnd)
             let records = loadRecords(for: dates)
-            return aggregate(records: records, scope: .week, periodDescription: periodTitle)
+            let buckets = buildWeekBuckets(startOfWeek: startOfWeek, records: records, calendar: calendar)
+            return aggregate(records: records, scope: .week, periodDescription: periodTitle, buckets: buckets)
             
         case .month:
             let comps = calendar.dateComponents([.year, .month], from: targetAnchor)
@@ -679,23 +760,90 @@ public final class ScreenTimeTrackerService: ObservableObject {
             guard let range = calendar.range(of: .day, in: .month, for: startOfMonth),
                   let endOfMonth = calendar.date(byAdding: .day, value: range.count - 1, to: startOfMonth) else {
                 let dates = [Self.dateFormatter.string(from: targetAnchor)]
-                return aggregate(records: loadRecords(for: dates), scope: .month, periodDescription: periodTitle)
+                let records = loadRecords(for: dates)
+                return aggregate(records: records, scope: .month, periodDescription: periodTitle)
             }
             let effectiveEnd = min(endOfMonth, now)
             let dates = getDatesBetween(start: startOfMonth, end: effectiveEnd)
             let records = loadRecords(for: dates)
-            return aggregate(records: records, scope: .month, periodDescription: periodTitle)
+            let buckets = buildMonthBuckets(startOfMonth: startOfMonth, daysCount: range.count, records: records, calendar: calendar)
+            return aggregate(records: records, scope: .month, periodDescription: periodTitle, buckets: buckets)
             
         case .year:
             let comps = calendar.dateComponents([.year], from: targetAnchor)
+            let targetYear = comps.year ?? calendar.component(.year, from: now)
             let startOfYear = calendar.date(from: comps) ?? targetAnchor
-            let compsNext = DateComponents(year: (comps.year ?? 2026) + 1, month: 1, day: 1)
+            let compsNext = DateComponents(year: targetYear + 1, month: 1, day: 1)
             let startOfNextYear = calendar.date(from: compsNext) ?? targetAnchor
             let endOfYear = calendar.date(byAdding: .day, value: -1, to: startOfNextYear) ?? targetAnchor
             let effectiveEnd = min(endOfYear, now)
             let dates = getDatesBetween(start: startOfYear, end: effectiveEnd)
             let records = loadRecords(for: dates)
-            return aggregate(records: records, scope: .year, periodDescription: periodTitle)
+            let buckets = buildYearBuckets(year: targetYear, records: records, calendar: calendar)
+            return aggregate(records: records, scope: .year, periodDescription: periodTitle, buckets: buckets)
+        }
+    }
+    
+    private func buildWeekBuckets(startOfWeek: Date, records: [DailyScreenTimeRecord], calendar: Calendar) -> [ScreenTimeBucket] {
+        let recordMap = Dictionary(uniqueKeysWithValues: records.map { ($0.dateString, $0.totalActiveSeconds) })
+        let weekdaySymbols = ["日", "一", "二", "三", "四", "五", "六"]
+        let df = DateFormatter()
+        df.dateFormat = "M月d日"
+        
+        return (0..<7).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: startOfWeek) else { return nil }
+            let dateStr = Self.dateFormatter.string(from: date)
+            let weekdayIdx = max(0, min(6, calendar.component(.weekday, from: date) - 1))
+            let symbol = weekdaySymbols[weekdayIdx]
+            return ScreenTimeBucket(
+                id: dateStr,
+                label: symbol,
+                fullLabel: "\(df.string(from: date)) 周\(symbol)",
+                durationSeconds: recordMap[dateStr] ?? 0,
+                date: date
+            )
+        }
+    }
+    
+    private func buildMonthBuckets(startOfMonth: Date, daysCount: Int, records: [DailyScreenTimeRecord], calendar: Calendar) -> [ScreenTimeBucket] {
+        let recordMap = Dictionary(uniqueKeysWithValues: records.map { ($0.dateString, $0.totalActiveSeconds) })
+        let df = DateFormatter()
+        df.dateFormat = "M月d日"
+        
+        return (0..<daysCount).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: startOfMonth) else { return nil }
+            let dateStr = Self.dateFormatter.string(from: date)
+            let day = calendar.component(.day, from: date)
+            return ScreenTimeBucket(
+                id: dateStr,
+                label: "\(day)",
+                fullLabel: df.string(from: date),
+                durationSeconds: recordMap[dateStr] ?? 0,
+                date: date
+            )
+        }
+    }
+    
+    private func buildYearBuckets(year: Int, records: [DailyScreenTimeRecord], calendar: Calendar) -> [ScreenTimeBucket] {
+        var monthTotals: [Int: TimeInterval] = [:]
+        for record in records {
+            let parts = record.dateString.split(separator: "-")
+            if parts.count >= 2, let m = Int(parts[1]) {
+                monthTotals[m, default: 0] += record.totalActiveSeconds
+            }
+        }
+        
+        return (1...12).compactMap { month in
+            let comps = DateComponents(year: year, month: month, day: 1)
+            guard let date = calendar.date(from: comps) else { return nil }
+            let id = String(format: "%04d-%02d", year, month)
+            return ScreenTimeBucket(
+                id: id,
+                label: "\(month)月",
+                fullLabel: "\(year)年\(month)月",
+                durationSeconds: monthTotals[month] ?? 0,
+                date: date
+            )
         }
     }
     
@@ -733,14 +881,21 @@ public final class ScreenTimeTrackerService: ObservableObject {
         return record
     }
     
-    private func aggregate(records: [DailyScreenTimeRecord], scope: TimeScope, periodDescription: String) -> AggregatedScreenTimeStats {
+    private func aggregate(
+        records: [DailyScreenTimeRecord],
+        scope: TimeScope,
+        periodDescription: String,
+        buckets: [ScreenTimeBucket] = []
+    ) -> AggregatedScreenTimeStats {
         var totalSec: TimeInterval = 0
+        var totalIdleSec: TimeInterval = 0
         var mergedApps: [String: AppUsageRecord] = [:]
         var mergedEvents: [UUID: EventTriggerRecord] = [:]
         var allPastLogs: [PastEventLogItem] = []
         
         for r in records {
             totalSec += r.totalActiveSeconds
+            totalIdleSec += r.totalIdleSeconds
             if let logs = r.pastEventLogs {
                 allPastLogs.append(contentsOf: logs)
             }
@@ -772,19 +927,34 @@ public final class ScreenTimeTrackerService: ObservableObject {
         allPastLogs.sort { $0.timestamp < $1.timestamp }
         let daysCount = max(1, records.count)
         let dailyAvg = totalSec / Double(daysCount)
-        let sortedApps = mergedApps.values.sorted { $0.durationSeconds > $1.durationSeconds }
-        let sortedEvents = mergedEvents.values.sorted { $0.count > $1.count }
+        let sortedApps = mergedApps.values.sorted {
+            if $0.durationSeconds != $1.durationSeconds {
+                return $0.durationSeconds > $1.durationSeconds
+            }
+            return $0.bundleIdentifier < $1.bundleIdentifier
+        }
+        let sortedEvents = mergedEvents.values.sorted {
+            if $0.count != $1.count {
+                return $0.count > $1.count
+            }
+            if $0.lastTriggeredAt != $1.lastTriggeredAt {
+                return $0.lastTriggeredAt > $1.lastTriggeredAt
+            }
+            return $0.id.uuidString < $1.id.uuidString
+        }
         let totalEventCount = mergedEvents.values.reduce(0) { $0 + $1.count }
         
         return AggregatedScreenTimeStats(
             scope: scope,
             totalActiveSeconds: totalSec,
+            totalIdleSeconds: totalIdleSec,
             sortedApps: sortedApps,
             sortedEventTriggers: sortedEvents,
             totalEventTriggerCount: totalEventCount,
             periodDescription: periodDescription,
             dailyAverageSeconds: dailyAvg,
-            pastEventLogs: allPastLogs
+            pastEventLogs: allPastLogs,
+            buckets: buckets
         )
     }
     
@@ -795,6 +965,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
             saveTodayRecord(force: true)
             todayRecord = DailyScreenTimeRecord(dateString: currentTodayStr)
             todayTotalSeconds = 0
+            todayIdleSeconds = 0
             todaySortedApps = []
             todaySortedEventTriggers = []
             todayTotalEventTriggerCount = 0
@@ -828,6 +999,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
             self.todayRecord = DailyScreenTimeRecord(dateString: todayStr)
         }
         self.todayTotalSeconds = todayRecord.totalActiveSeconds
+        self.todayIdleSeconds = todayRecord.totalIdleSeconds
         self.todaySortedApps = todayRecord.sortedApps
         self.todaySortedEventTriggers = todayRecord.sortedEventTriggers
         self.todayTotalEventTriggerCount = todayRecord.totalEventTriggerCount
@@ -837,6 +1009,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
         let todayStr = Self.dateFormatter.string(from: Date())
         todayRecord = DailyScreenTimeRecord(dateString: todayStr)
         todayTotalSeconds = 0
+        todayIdleSeconds = 0
         todaySortedApps = []
         todaySortedEventTriggers = []
         todayTotalEventTriggerCount = 0
@@ -871,6 +1044,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
     }
     
     public func recordAppUsageForTesting(bundleId: String, appName: String, duration: TimeInterval, activations: Int = 1) {
+        currentForegroundApp = (name: appName, bundleId: bundleId)
         todayRecord.totalActiveSeconds += duration
         var record = todayRecord.appUsages[bundleId] ?? AppUsageRecord(
             bundleIdentifier: bundleId,

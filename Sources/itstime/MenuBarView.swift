@@ -96,41 +96,9 @@ struct MenuBarView: View {
                             }
                             
                             // Section 4: 屏幕时间与事件概览 (点击在原有面板内直接切换)
-                            Button {
+                            ScreenTimeSummaryCard {
                                 currentPage = .screenTime
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "hourglass")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.secondary)
-                                    Text(screenTime.formattedTodayDuration)
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(.secondary)
-                                    
-                                    if screenTime.todayTotalEventTriggerCount > 0 {
-                                        Text("•")
-                                            .foregroundColor(.secondary.opacity(0.5))
-                                            .font(.system(size: 9))
-                                        Text("\(screenTime.todayTotalEventTriggerCount)次")
-                                            .font(.system(size: 11, weight: .medium))
-                                            .foregroundColor(.orange)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.secondary.opacity(0.6))
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.35))
-                                )
                             }
-                            .buttonStyle(.plain)
-                            .help("查看屏幕时间与统计")
                         }
                         .padding(.horizontal, 14)
                         .padding(.top, 8)
@@ -192,83 +160,11 @@ struct MenuBarView: View {
             
             // 右侧：更多功能菜单
             Menu {
-                // 1. 窗口与功能
-                Button {
-                    WindowManager.shared.openMainWindow()
-                } label: {
-                    Label("打开主窗口", systemImage: "macwindow")
-                }
-                
-                Button {
-                    currentPage = .screenTime
-                } label: {
-                    Label("屏幕时间与事件统计", systemImage: "hourglass")
-                }
-                
-                Button {
-                    showingCalendarSync = true
-                } label: {
-                    Label("日历与提醒事项", systemImage: "calendar.badge.clock")
-                }
-                
-                Divider()
-                
-                // 2. 运行控制
-                let hasActive = scheduler.hasActiveRunningTasks
-                Button {
-                    scheduler.togglePauseAll()
-                } label: {
-                    Label(
-                        hasActive ? "暂停所有任务" : "恢复所有任务",
-                        systemImage: hasActive ? "pause.circle" : "play.circle"
-                    )
-                }
-                
-                if audioService.isPlaying {
-                    Button {
-                        audioService.stop(fadeOut: true)
-                    } label: {
-                        Label("停止播放: \(audioService.currentPlayingName)", systemImage: "stop.circle.fill")
-                    }
-                }
-                
-                Divider()
-                
-                // 3. 偏好与系统
-                Toggle(isOn: Binding(
-                    get: { launchManager.isEnabled },
-                    set: { _ in launchManager.toggle() }
-                )) {
-                    Label("开机自启动", systemImage: "power.circle")
-                }
-                
-                Button {
-                    updateManager.checkForUpdates(userInitiated: true)
-                } label: {
-                    Label("检查更新...", systemImage: "arrow.triangle.2.circlepath")
-                }
-                
-                Button {
-                    NSApplication.shared.activate(ignoringOtherApps: true)
-                    NSApplication.shared.orderFrontStandardAboutPanel(
-                        options: [
-                            NSApplication.AboutPanelOptionKey.applicationName: "It's Time",
-                            NSApplication.AboutPanelOptionKey.version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-                        ]
-                    )
-                } label: {
-                    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-                    Label("关于 It's Time (v\(appVersion))", systemImage: "info.circle")
-                }
-                
-                Divider()
-                
-                // 4. 退出
-                Button(role: .destructive) {
-                    NSApplication.shared.terminate(nil)
-                } label: {
-                    Label("退出 It's Time", systemImage: "power")
-                }
+                SharedMoreMenuContent(
+                    showOpenMainWindow: true,
+                    onOpenScreenTime: { currentPage = .screenTime },
+                    onOpenCalendarSync: { showingCalendarSync = true }
+                )
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 11, weight: .bold))
@@ -281,7 +177,6 @@ struct MenuBarView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .focusable(false)
-            .help("更多功能与设置")
         }
         .frame(height: 26)
     }
@@ -302,7 +197,7 @@ struct MenuBarView: View {
                 scheduler.resetCountdown(id: task.id)
             },
             onExecuteNow: {
-                scheduler.executeAction(for: task)
+                scheduler.executeAction(for: task, isManualTest: true)
             },
             onEdit: {
                 editingTask = task
@@ -357,7 +252,7 @@ struct MenuBarView: View {
             }
             .buttonStyle(.plain)
             .focusable(false)
-            .help("停止试听/播放")
+            .floatingTooltip("停止试听/播放")
         }
         .padding(.horizontal, 8)
         .frame(height: 24)
@@ -402,5 +297,112 @@ struct MenuBarView: View {
                 self.syncToastMessage = nil
             }
         }
+    }
+}
+
+// MARK: - 共享更多功能菜单内容（菜单栏与主窗口统一）
+struct SharedMoreMenuContent: View {
+    let showOpenMainWindow: Bool
+    let onOpenScreenTime: () -> Void
+    let onOpenCalendarSync: () -> Void
+    
+    @ObservedObject private var scheduler = SchedulerEngine.shared
+    @ObservedObject private var audioService = AudioService.shared
+    @ObservedObject private var launchManager = LaunchAtLoginManager.shared
+    @ObservedObject private var updateManager = UpdateManager.shared
+    
+    var body: some View {
+        if showOpenMainWindow {
+            Button {
+                WindowManager.shared.openMainWindow()
+            } label: {
+                Label("打开主窗口", systemImage: "macwindow")
+            }
+        }
+        
+        Button(action: onOpenScreenTime) {
+            Label("屏幕时间与事件统计", systemImage: "hourglass")
+        }
+        
+        Button(action: onOpenCalendarSync) {
+            Label("日历与提醒事项", systemImage: "calendar.badge.clock")
+        }
+        
+        Divider()
+        
+        let hasActive = scheduler.hasActiveRunningTasks
+        Button {
+            scheduler.togglePauseAll()
+        } label: {
+            Label(
+                hasActive ? "暂停所有任务" : "恢复所有任务",
+                systemImage: hasActive ? "pause.circle" : "play.circle"
+            )
+        }
+        
+        if audioService.isPlaying {
+            Button {
+                audioService.stop(fadeOut: true)
+            } label: {
+                Label("停止播放: \(audioService.currentPlayingName)", systemImage: "stop.circle.fill")
+            }
+        }
+        
+        Divider()
+        
+        Toggle(isOn: Binding(
+            get: { launchManager.isEnabled },
+            set: { _ in launchManager.toggle() }
+        )) {
+            Label("开机自启动", systemImage: "power.circle")
+        }
+        
+        Button {
+            updateManager.checkForUpdates(userInitiated: true)
+        } label: {
+            Label("检查更新...", systemImage: "arrow.triangle.2.circlepath")
+        }
+        
+        Button {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            NSApplication.shared.orderFrontStandardAboutPanel(
+                options: [
+                    NSApplication.AboutPanelOptionKey.applicationName: "It's Time",
+                    NSApplication.AboutPanelOptionKey.version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+                ]
+            )
+        } label: {
+            let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+            Label("关于 It's Time (v\(appVersion))", systemImage: "info.circle")
+        }
+        
+        Divider()
+        
+        Button(role: .destructive) {
+            NSApplication.shared.terminate(nil)
+        } label: {
+            Label("退出 It's Time", systemImage: "power")
+        }
+    }
+}
+
+// MARK: - 共享屏幕时间与事件概览卡片（复用比例时间带组件）
+struct ScreenTimeSummaryCard: View {
+    let onTap: () -> Void
+    @ObservedObject private var screenTime = ScreenTimeTrackerService.shared
+    
+    var body: some View {
+        let todayStats = screenTime.calculateStats(for: .day, anchor: Date())
+        Button(action: onTap) {
+            ScreenTimeProportionStrip(
+                activeSeconds: todayStats.totalActiveSeconds,
+                idleSeconds: todayStats.totalIdleSeconds,
+                activeText: todayStats.formattedTotalDuration,
+                idleText: todayStats.formattedTotalIdleDuration,
+                eventTriggerCount: todayStats.totalEventTriggerCount
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

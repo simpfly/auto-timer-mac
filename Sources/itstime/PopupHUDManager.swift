@@ -194,20 +194,7 @@ struct PopupHUDContentView: View {
         }
         .padding(22)
         .frame(width: 460)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.35), Color.white.opacity(0.12)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.black.opacity(0.25), radius: 30, x: 0, y: 15)
+        .glassHUD(cornerRadius: 16)
         .disableFocusEffect()
     }
     

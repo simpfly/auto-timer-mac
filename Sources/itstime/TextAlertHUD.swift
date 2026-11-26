@@ -198,13 +198,8 @@ struct TextAlertBubbleView: View {
                 Spacer()
             }
         }
-        .padding(14)
-        .frame(width: 290)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-        )
+        .padding(16)
+        .frame(width: 296)
+        .glassHUD(cornerRadius: 16, accentColor: hud.currentColor)
     }
 }
