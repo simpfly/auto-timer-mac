@@ -25,12 +25,14 @@ public struct SectionHeaderView: View {
                 .foregroundColor(.secondary)
             
             if let c = count, c > 0 {
+                let isNeutral = accentColor == .secondary
                 Text("\(c)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(accentColor)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(accentColor.opacity(0.12))
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(isNeutral ? .primary.opacity(0.65) : accentColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1.5)
+                    .background(isNeutral ? Color.primary.opacity(0.07) : accentColor.opacity(0.12))
                     .clipShape(Capsule())
             }
             

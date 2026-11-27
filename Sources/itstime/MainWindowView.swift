@@ -60,7 +60,7 @@ struct MainWindowView: View {
                 .transition(.opacity)
             } else {
                 VStack(spacing: 0) {
-                    // 顶栏：极简通透（与系统红绿灯处于同一水平线）
+                    // 顶栏：极简通透（位于红绿灯下方，与主内容区左对齐）
                     headerBar
                     
                     // 任务列表主区域（三级明确视觉层次）
@@ -79,7 +79,12 @@ struct MainWindowView: View {
                             }
                         }
                         
-                        // 3. 计划任务列表
+                        // 3. 屏幕时间与事件概览（置于计划上方，与菜单栏布局一致）
+                        ScreenTimeSummaryCard {
+                            currentPage = .screenTime
+                        }
+                        
+                        // 4. 计划任务列表
                         if !regularPlannedTasks.isEmpty {
                             SectionHeaderView(icon: "list.bullet.rectangle", title: "计划", count: regularPlannedTasks.count, accentColor: .secondary)
                             LazyVStack(spacing: 8) {
@@ -90,17 +95,11 @@ struct MainWindowView: View {
                         } else if activeCountdownTasks.isEmpty && scheduler.tasks.isEmpty {
                             emptyStateView
                         }
-                        
-                        // 4. 屏幕时间与事件概览（与菜单栏共用同一组件）
-                        ScreenTimeSummaryCard {
-                            currentPage = .screenTime
-                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.bottom, 32)
                 }
             }
-            .ignoresSafeArea(.container, edges: .top)
             }
             
             // 轻量 Toast 提示
@@ -141,17 +140,12 @@ struct MainWindowView: View {
         }
     }
     
-    // MARK: - 顶栏 (底层左右锚定 + 中间 HUD 绝对居中层叠，彻底杜绝标题被挤压加宽/弹动)
+    // MARK: - 顶栏 (位于红绿灯下方，左对齐内容区 + 中间 HUD 绝对居中层叠)
     private var headerBar: some View {
         HStack(alignment: .center) {
-            // 左侧：红绿灯安全留白与品牌标题
-            HStack(spacing: 8) {
-                Spacer()
-                    .frame(width: 70)
-                
-                BrandTitleView()
-            }
-            .fixedSize()
+            // 左侧：品牌标题与下方内容左对齐
+            BrandTitleView()
+                .fixedSize()
             
             Spacer()
             
@@ -187,8 +181,8 @@ struct MainWindowView: View {
             alignment: .center
         )
         .padding(.horizontal, 24)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
     }
     
     // MARK: - 单卡片复用构建
@@ -362,7 +356,14 @@ struct TaskCardView: View {
     
     // MARK: - 正在专注特写看板 (Spotlight)
     private var spotlightBody: some View {
-        HStack(alignment: .center, spacing: 14) {
+        let semanticColor: Color = task.isPaused ? .orange : .accentColor
+        let progressRatio: CGFloat = {
+            guard case .countdown(let totalSeconds) = task.trigger, totalSeconds > 0 else { return 0 }
+            let remaining = task.countdownRemainingSeconds ?? totalSeconds
+            return max(0, min(1, CGFloat(remaining) / CGFloat(totalSeconds)))
+        }()
+        
+        return HStack(alignment: .center, spacing: 14) {
             // 左侧：状态指示 + 任务名称 + 动作
             VStack(alignment: .leading, spacing: 5) {
                 if task.isPaused {
@@ -414,7 +415,7 @@ struct TaskCardView: View {
                     Text(String(format: "%02d:%02d", m, s))
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundColor(task.isPaused ? .orange : .accentColor)
+                        .foregroundColor(task.isPaused ? .orange : .primary)
                 }
                 
                 HStack(spacing: 6) {
@@ -453,8 +454,29 @@ struct TaskCardView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.leading, 18)
+        .padding(.trailing, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
+        .overlay(alignment: .leading) {
+            // 左侧细语义色条
+            Rectangle()
+                .fill(semanticColor.opacity(0.85))
+                .frame(width: 3)
+        }
+        .overlay(alignment: .bottom) {
+            // 底部极细静态进度线
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.06))
+                    Rectangle()
+                        .fill(semanticColor.opacity(0.8))
+                        .frame(width: geo.size.width * progressRatio)
+                }
+            }
+            .frame(height: 2.5)
+        }
         .glassCard(cornerRadius: 12, isSpotlight: true, isPaused: task.isPaused, isEnabled: true)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { onEdit() }
@@ -463,68 +485,54 @@ struct TaskCardView: View {
     
     // MARK: - 常规计划任务卡片 (Standard)
     private var standardBody: some View {
-        HStack(alignment: .center, spacing: 12) {
-            // 左侧：名称 + 标签 + 核心时间 + 动作
+        let showActionButtons = isHovered || isPlayingCurrentTaskAudio
+        
+        return HStack(alignment: .center, spacing: 12) {
+            // 左侧：极简两行排版（名称 + 提示类型图标 + 异常状态；触发图标 + 时间 + 下次触发）
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .center, spacing: 6) {
+                    if !actionBriefDescription.isEmpty || task.action == .none {
+                        Image(systemName: isActionAudioMissing ? "exclamationmark.triangle.fill" : actionIconName)
+                            .font(.system(size: 10.5))
+                            .foregroundColor(isActionAudioMissing ? .red : .secondary.opacity(0.75))
+                            .floatingTooltip(isActionAudioMissing ? "音频已丢失：\(actionBriefDescription)" : (actionBriefDescription.isEmpty ? "声音通知" : actionBriefDescription))
+                    }
+                    
                     Text(task.name)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
                         .lineLimit(1)
                     
-                    triggerBadge
-                    
-                    // 下次生效时间（图 p1）
-                    if let next = nextTriggerTimeString {
-                        Text(next)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
+                    statusBadge
                 }
                 
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    timeView
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Image(systemName: triggerIconName)
+                            .font(.system(size: 10))
+                            .foregroundColor(task.isEnabled ? .secondary : .secondary.opacity(0.5))
+                            .alignmentGuide(.firstTextBaseline) { d in d[.bottom] - 1.5 }
+                        timeView
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .layoutPriority(1)
                     
-                    if !actionBriefDescription.isEmpty {
+                    if let next = nextTriggerTimeString {
                         Text("·")
                             .font(.system(size: 11))
                             .foregroundColor(.secondary.opacity(0.4))
-                        
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
-                            Image(systemName: isActionAudioMissing ? "exclamationmark.triangle.fill" : actionIconName)
-                                .font(.system(size: 10))
-                                .foregroundColor(isActionAudioMissing ? .red : .secondary)
-                                .alignmentGuide(.firstTextBaseline) { d in d[.bottom] - 1.5 }
-                            Text(actionBriefDescription)
-                                .font(.system(size: 11))
-                                .foregroundColor(isActionAudioMissing ? .red : .secondary.opacity(0.8))
-                                .lineLimit(1)
-                            
-                            if isActionAudioMissing {
-                                Text("音频已丢失")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(Color.red)
-                                    .clipShape(Capsule())
-                                    .alignmentGuide(.firstTextBaseline) { d in d[.bottom] - 1 }
-                            }
-                        }
+                        Text(next)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
-            // 右侧：开关 + 低噪微操作工具栏
-            VStack(alignment: .trailing, spacing: 6) {
-                CompactGreenSwitch(
-                    isOn: task.isEnabled,
-                    onToggle: onToggleEnabled
-                )
-                
-                HStack(spacing: 6) {
-                    // 播放 / 停止 双态测试按钮（点击变停止，再次点击停止播放）
+            // 右侧：悬停操作按钮（仅悬停或正在播放时显示） + 开关
+            HStack(spacing: 8) {
+                HStack(spacing: 5) {
                     Button(action: handlePlayButtonTapped) {
                         Image(systemName: isPlayingCurrentTaskAudio ? "stop.fill" : "play.fill")
                             .font(.system(size: 8, weight: .bold))
@@ -558,7 +566,14 @@ struct TaskCardView: View {
                     .buttonStyle(.plain)
                     .floatingTooltip("删除")
                 }
-                .opacity(isHovered ? 1.0 : 0.45)
+                .opacity(showActionButtons ? 1.0 : 0.0)
+                .allowsHitTesting(showActionButtons)
+                .animation(.easeInOut(duration: 0.14), value: showActionButtons)
+                
+                CompactGreenSwitch(
+                    isOn: task.isEnabled,
+                    onToggle: onToggleEnabled
+                )
             }
         }
         .padding(.horizontal, 14)
@@ -604,13 +619,13 @@ struct TaskCardView: View {
         }
     }
     
-    // MARK: - 触发模式徽章
+    // MARK: - 异常状态徽章（仅停用或暂停时显示，正常启用态保持极简零冗余）
     @ViewBuilder
-    private var triggerBadge: some View {
+    private var statusBadge: some View {
         if !task.isEnabled {
             Text("已停用")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary.opacity(0.7))
+                .foregroundColor(.secondary.opacity(0.75))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Color.secondary.opacity(0.1))
@@ -627,49 +642,16 @@ struct TaskCardView: View {
             .padding(.vertical, 2)
             .background(Color.orange.opacity(0.12))
             .clipShape(Capsule())
-        } else {
-            switch task.trigger {
-            case .once:
-                Text("一次").font(.caption).foregroundStyle(.orange)
-            case .countdown:
-                HStack(spacing: 3) {
-                    Image(systemName: "timer")
-                        .font(.system(size: 8))
-                    Text("倒计时")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundColor(.accentColor)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.accentColor.opacity(0.12))
-                .clipShape(Capsule())
-                
-            case .daily:
-                HStack(spacing: 3) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 8))
-                    Text("定时")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundColor(.indigo)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.indigo.opacity(0.12))
-                .clipShape(Capsule())
-                
-            case .interval:
-                HStack(spacing: 3) {
-                    Image(systemName: "repeat")
-                        .font(.system(size: 8))
-                    Text("循环")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundColor(.teal)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.teal.opacity(0.12))
-                .clipShape(Capsule())
-            }
+        }
+    }
+    
+    // MARK: - 触发类型轻量图标（替代彩色胶囊）
+    private var triggerIconName: String {
+        switch task.trigger {
+        case .once: return "calendar"
+        case .countdown: return "timer"
+        case .daily: return "clock"
+        case .interval: return "repeat"
         }
     }
     
@@ -688,14 +670,14 @@ struct TaskCardView: View {
             let m = remaining / 60
             let s = remaining % 60
             Text(String(format: "%02d:%02d", m, s))
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
                 .lineLimit(1)
                 
         case .daily(let hour, let minute):
             Text(String(format: "%02d:%02d", hour, minute))
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
                 .lineLimit(1)
@@ -703,7 +685,7 @@ struct TaskCardView: View {
         case .interval(let intervalSeconds):
             if intervalSeconds < 60 {
                 Text("\(intervalSeconds)秒")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
                     .lineLimit(1)
             } else {
@@ -712,18 +694,18 @@ struct TaskCardView: View {
                 if s == 0 {
                     if m >= 60 && m % 60 == 0 {
                         Text("\(m / 60)小时")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
                             .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
                             .lineLimit(1)
                     } else {
                         Text("\(m)分钟")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
                             .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
                             .lineLimit(1)
                     }
                 } else {
                     Text(String(format: "%02d:%02d", m, s))
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundColor(task.isEnabled ? .primary : .secondary.opacity(0.6))
                         .lineLimit(1)

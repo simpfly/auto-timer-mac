@@ -83,7 +83,12 @@ struct MenuBarView: View {
                                 }
                             }
                             
-                            // Section 3: 计划任务列表
+                            // Section 3: 屏幕时间与事件概览（置于计划上方）
+                            ScreenTimeSummaryCard {
+                                currentPage = .screenTime
+                            }
+                            
+                            // Section 4: 计划任务列表
                             if !regularPlannedTasks.isEmpty {
                                 SectionHeaderView(icon: "list.bullet.rectangle", title: "计划", count: regularPlannedTasks.count, accentColor: .secondary)
                                 LazyVStack(spacing: 8) {
@@ -93,11 +98,6 @@ struct MenuBarView: View {
                                 }
                             } else if activeCountdownTasks.isEmpty && scheduler.tasks.isEmpty {
                                 emptyStateView
-                            }
-                            
-                            // Section 4: 屏幕时间与事件概览 (点击在原有面板内直接切换)
-                            ScreenTimeSummaryCard {
-                                currentPage = .screenTime
                             }
                         }
                         .padding(.horizontal, 14)

@@ -830,13 +830,13 @@ struct ScreenTimeProportionStrip: View {
                 let idleWidth = max(0, usableWidth - activeWidth)
                 
                 HStack(spacing: gap) {
-                    // 左方框：活跃时间（蓝色）
+                    // 左方框：屏幕活跃时间（蓝色）
                     proportionBox(
                         title: "活跃",
                         durationText: activeText,
                         width: activeWidth,
                         tint: .blue,
-                        helpText: "活跃时间 \(activeText)"
+                        helpText: "屏幕活跃时间 \(activeText)"
                     )
                     
                     // 右方框：亮屏闲置时间（灰色）

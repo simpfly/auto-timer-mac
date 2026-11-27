@@ -43,8 +43,8 @@ public struct GlassCardModifier: ViewModifier {
         content
             .background(
                 isSpotlight
-                    ? (isPaused ? Color.orange.opacity(0.08) : Color.accentColor.opacity(0.08))
-                    : Color(NSColor.controlBackgroundColor).opacity(0.35)
+                    ? (isPaused ? Color.orange.opacity(0.06) : Color.accentColor.opacity(0.05))
+                    : Color(NSColor.controlBackgroundColor).opacity(0.5)
             )
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -52,16 +52,16 @@ public struct GlassCardModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         isSpotlight
-                            ? (isPaused ? Color.orange.opacity(0.55) : Color.accentColor.opacity(0.55))
-                            : Color.white.opacity(isEnabled ? 0.14 : 0.06),
-                        lineWidth: isSpotlight ? 1.2 : 0.8
+                            ? (isPaused ? Color.orange.opacity(0.22) : Color.primary.opacity(0.09))
+                            : Color.primary.opacity(isEnabled ? 0.08 : 0.04),
+                        lineWidth: 0.8
                     )
             )
             .shadow(
-                color: isSpotlight ? (isPaused ? Color.orange.opacity(0.12) : Color.accentColor.opacity(0.12)) : Color.black.opacity(0.03),
-                radius: isSpotlight ? 8 : 4,
+                color: isSpotlight ? Color.black.opacity(0.05) : Color.black.opacity(0.03),
+                radius: isSpotlight ? 6 : 3,
                 x: 0,
-                y: isSpotlight ? 3 : 2
+                y: isSpotlight ? 2 : 1.5
             )
     }
 }
