@@ -157,6 +157,7 @@ private final class FloatingTooltipController {
     private func present(text: String) {
         let contentView = TooltipBubbleContent(text: text)
         let hosting = NSHostingView(rootView: contentView)
+        hosting.layoutSubtreeIfNeeded()
         let fittingSize = hosting.fittingSize
         
         let panel = self.panel ?? {
@@ -211,6 +212,7 @@ private struct TooltipBubbleContent: View {
             .foregroundColor(.primary)
             .lineLimit(2)
             .multilineTextAlignment(.center)
+            .fixedSize(horizontal: true, vertical: true)
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .background(.regularMaterial)

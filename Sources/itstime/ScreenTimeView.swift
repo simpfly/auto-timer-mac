@@ -820,7 +820,7 @@ struct ScreenTimeProportionStrip: View {
                 
                 let total = max(1, activeSeconds + (showIdleBox ? idleSeconds : 0))
                 let rawActiveRatio = CGFloat(activeSeconds / total)
-                let minBoxWidth: CGFloat = min(56, usableWidth * 0.35)
+                let minBoxWidth: CGFloat = min(68, usableWidth * 0.38)
                 
                 let activeWidth: CGFloat = {
                     guard showIdleBox else { return usableWidth }
@@ -872,7 +872,9 @@ struct ScreenTimeProportionStrip: View {
         tint: Color,
         helpText: String
     ) -> some View {
-        let showTitle = width >= 88
+        // 根据时长文本长度预留足够空间，确保数字绝不被截断
+        let estimatedDurationWidth = CGFloat(durationText.count) * 7.2 + 20
+        let showTitle = width >= (estimatedDurationWidth + 36)
         HStack(spacing: 4) {
             if showTitle {
                 Text(title)
@@ -883,6 +885,7 @@ struct ScreenTimeProportionStrip: View {
             Text(durationText)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .foregroundColor(tint == .blue ? .blue : .secondary)
         .padding(.horizontal, 10)
