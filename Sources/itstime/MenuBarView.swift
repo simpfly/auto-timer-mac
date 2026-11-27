@@ -308,8 +308,7 @@ struct SharedMoreMenuContent: View {
     
     @ObservedObject private var scheduler = SchedulerEngine.shared
     @ObservedObject private var audioService = AudioService.shared
-    @ObservedObject private var launchManager = LaunchAtLoginManager.shared
-    @ObservedObject private var updateManager = UpdateManager.shared
+    @ObservedObject private var prefs = AppPreferences.shared
     
     var body: some View {
         if showOpenMainWindow {
@@ -340,6 +339,26 @@ struct SharedMoreMenuContent: View {
             )
         }
         
+        if prefs.isDndActive {
+            Button {
+                scheduler.clearDnd()
+            } label: {
+                let rem = prefs.dndRemainingDescription ?? ""
+                Label("结束免打扰\(rem.isEmpty ? "" : " (剩\(rem))")", systemImage: "bell.badge")
+            }
+        } else {
+            Menu {
+                Button("暂停提醒 1 小时") {
+                    scheduler.enableDndForOneHour()
+                }
+                Button("今日不再提醒") {
+                    scheduler.enableDndUntilTomorrow()
+                }
+            } label: {
+                Label("临时免打扰", systemImage: "moon.zzz")
+            }
+        }
+        
         if audioService.isPlaying {
             Button {
                 audioService.stop(fadeOut: true)
@@ -350,17 +369,10 @@ struct SharedMoreMenuContent: View {
         
         Divider()
         
-        Toggle(isOn: Binding(
-            get: { launchManager.isEnabled },
-            set: { _ in launchManager.toggle() }
-        )) {
-            Label("开机自启动", systemImage: "power.circle")
-        }
-        
         Button {
-            updateManager.checkForUpdates(userInitiated: true)
+            WindowManager.shared.openPreferencesWindow()
         } label: {
-            Label("检查更新...", systemImage: "arrow.triangle.2.circlepath")
+            Label("偏好设置...", systemImage: "gearshape")
         }
         
         Button {

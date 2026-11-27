@@ -75,6 +75,13 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
                 self?.updateStatusItemAppearance()
             }
             .store(in: &cancellables)
+        
+        AppPreferences.shared.$dndUntil
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateStatusItemAppearance()
+            }
+            .store(in: &cancellables)
     }
     
     /// 动态刷新状态栏图标和文字
@@ -87,7 +94,14 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
             return
         }
         
-        if let preAlert = SchedulerEngine.shared.pendingAudioAlert {
+        if AppPreferences.shared.isDndActive {
+            let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+                .applying(.init(paletteColors: [.systemOrange]))
+            button.image = NSImage(systemSymbolName: "moon.zzz.fill", accessibilityDescription: "免打扰中")?
+                .withSymbolConfiguration(config)
+            button.imagePosition = .imageLeft
+            button.attributedTitle = NSAttributedString(string: "")
+        } else if let preAlert = SchedulerEngine.shared.pendingAudioAlert {
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .bold)
                 .applying(.init(paletteColors: [.systemOrange]))
             button.image = NSImage(systemSymbolName: "bell.badge.waveform.fill", accessibilityDescription: "预告倒计时")?
@@ -252,6 +266,33 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         )
         menu.addItem(pauseAllItem)
         
+        // 3.5 临时免打扰
+        if AppPreferences.shared.isDndActive {
+            let rem = AppPreferences.shared.dndRemainingDescription ?? ""
+            let resumeDndItem = NSMenuItem(
+                title: "结束免打扰\(rem.isEmpty ? "" : " (剩\(rem))")",
+                action: #selector(clearDndAction),
+                keyEquivalent: ""
+            )
+            resumeDndItem.target = self
+            resumeDndItem.image = NSImage(systemSymbolName: "bell.badge", accessibilityDescription: nil)
+            menu.addItem(resumeDndItem)
+        } else {
+            let dndMenu = NSMenu()
+            let oneHourItem = NSMenuItem(title: "暂停提醒 1 小时", action: #selector(enableDndOneHourAction), keyEquivalent: "")
+            oneHourItem.target = self
+            dndMenu.addItem(oneHourItem)
+            
+            let todayItem = NSMenuItem(title: "今日不再提醒", action: #selector(enableDndTodayAction), keyEquivalent: "")
+            todayItem.target = self
+            dndMenu.addItem(todayItem)
+            
+            let dndRootItem = NSMenuItem(title: "临时免打扰", action: nil, keyEquivalent: "")
+            dndRootItem.image = NSImage(systemSymbolName: "moon.zzz", accessibilityDescription: nil)
+            dndRootItem.submenu = dndMenu
+            menu.addItem(dndRootItem)
+        }
+        
         // 4. 正在播放音频时提供一键停止
         if AudioService.shared.isPlaying {
             let playingName = AudioService.shared.currentPlayingName
@@ -267,30 +308,17 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
-        // 5. 开机自启动项（带复选勾选状态）
-        LaunchAtLoginManager.shared.refreshStatus()
-        let isLaunchEnabled = LaunchAtLoginManager.shared.isEnabled
-        let launchItem = NSMenuItem(
-            title: "开机自启动",
-            action: #selector(toggleLaunchAtLogin),
-            keyEquivalent: ""
+        // 5. 偏好设置
+        let prefItem = NSMenuItem(
+            title: "偏好设置...",
+            action: #selector(openPreferences),
+            keyEquivalent: ","
         )
-        launchItem.target = self
-        launchItem.state = isLaunchEnabled ? .on : .off
-        launchItem.image = NSImage(systemSymbolName: "power.circle", accessibilityDescription: nil)
-        menu.addItem(launchItem)
+        prefItem.target = self
+        prefItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
+        menu.addItem(prefItem)
         
-        // 6. 检查更新
-        let updateItem = NSMenuItem(
-            title: "检查更新...",
-            action: #selector(checkForUpdatesAction),
-            keyEquivalent: "u"
-        )
-        updateItem.target = self
-        updateItem.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
-        menu.addItem(updateItem)
-        
-        // 7. 关于 It's Time
+        // 6. 关于 It's Time
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let aboutItem = NSMenuItem(
             title: "关于 It's Time (v\(appVersion))",
@@ -327,10 +355,6 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         closePopover()
         WindowManager.shared.openCalendarSyncWindow()
     }
-    @objc private func checkForUpdatesAction() {
-        closePopover()
-        UpdateManager.shared.checkForUpdates(userInitiated: true)
-    }
     
     @objc private func showAbout() {
         NSApplication.shared.activate(ignoringOtherApps: true)
@@ -342,10 +366,6 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         )
     }
     
-    @objc private func toggleLaunchAtLogin() {
-        LaunchAtLoginManager.shared.toggle()
-    }
-    
     @objc private func openMainWindow() {
         closePopover()
         WindowManager.shared.openMainWindow()
@@ -353,6 +373,23 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     
     @objc private func togglePauseAllTasks() {
         SchedulerEngine.shared.togglePauseAll()
+    }
+    
+    @objc private func enableDndOneHourAction() {
+        SchedulerEngine.shared.enableDndForOneHour()
+    }
+    
+    @objc private func enableDndTodayAction() {
+        SchedulerEngine.shared.enableDndUntilTomorrow()
+    }
+    
+    @objc private func clearDndAction() {
+        SchedulerEngine.shared.clearDnd()
+    }
+    
+    @objc private func openPreferences() {
+        closePopover()
+        WindowManager.shared.openPreferencesWindow()
     }
     
     @objc private func stopAudio() {

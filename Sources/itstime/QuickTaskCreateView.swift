@@ -1007,7 +1007,7 @@ struct QuickTaskCreateView: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.audio]
         if panel.runModal() == .OK, let url = panel.url {
-            selectedAudioPath = url.path
+            selectedAudioPath = AudioService.importManagedAudio(from: url)
             selectedAudioName = url.lastPathComponent
         }
     }

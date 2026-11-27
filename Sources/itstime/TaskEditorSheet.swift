@@ -899,7 +899,7 @@ struct TaskEditorSheet: View {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.audio, .mp3, .wav, .aiff, UTType(filenameExtension: "m4a") ?? .audio]
         if panel.runModal() == .OK, let url = panel.url {
-            self.audioPath = url.path
+            self.audioPath = AudioService.importManagedAudio(from: url)
             self.audioDisplayName = url.lastPathComponent
             if self.name.isEmpty { self.name = url.deletingPathExtension().lastPathComponent }
         }

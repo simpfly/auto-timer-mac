@@ -454,16 +454,9 @@ struct TaskCardView: View {
                 }
             }
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 16)
+        .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 14)
-        .overlay(alignment: .leading) {
-            // 左侧细语义色条
-            Rectangle()
-                .fill(semanticColor.opacity(0.85))
-                .frame(width: 3)
-        }
         .overlay(alignment: .bottom) {
             // 底部极细静态进度线
             GeometryReader { geo in

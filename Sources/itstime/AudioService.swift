@@ -345,4 +345,53 @@ public final class AudioService: NSObject, ObservableObject, AVAudioPlayerDelega
             self.stopImmediately()
         }
     }
+    
+    // MARK: - 自定义音频文件托管
+    
+    /// 获取应用托管音频目录（Application Support/It's Time/Audio）
+    public static func managedAudioDirectory() -> URL {
+        AppPreferences.appSupportDirectory(subpath: "Audio")
+    }
+    
+    /// 将用户选择的外部音频拷贝至应用托管目录，防止原文件被移动/重命名后失效
+    public static func importManagedAudio(from sourceURL: URL, into directory: URL? = nil) -> String {
+        let targetDir = directory ?? managedAudioDirectory()
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: targetDir.path) {
+            try? fm.createDirectory(at: targetDir, withIntermediateDirectories: true)
+        }
+        
+        let standardizedSource = sourceURL.standardizedFileURL.path
+        let standardizedDir = targetDir.standardizedFileURL.path
+        if standardizedSource.hasPrefix(standardizedDir + "/") {
+            return sourceURL.path
+        }
+        
+        let destName = "\(UUID().uuidString.prefix(8))_\(sourceURL.lastPathComponent)"
+        let destURL = targetDir.appendingPathComponent(destName)
+        do {
+            try fm.copyItem(at: sourceURL, to: destURL)
+            return destURL.path
+        } catch {
+            print("⚠️ 拷贝托管音频失败，回退使用原路径: \(error.localizedDescription)")
+            return sourceURL.path
+        }
+    }
+    
+    /// 清理不再被任何任务引用的托管音频文件
+    public static func cleanupOrphanedManagedAudio(referencedPaths: [String], in directory: URL? = nil) {
+        let targetDir = directory ?? managedAudioDirectory()
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(at: targetDir, includingPropertiesForKeys: nil) else {
+            return
+        }
+        
+        let referencedSet = Set(referencedPaths.map { URL(fileURLWithPath: $0).standardizedFileURL.path })
+        for fileURL in contents {
+            let path = fileURL.standardizedFileURL.path
+            if !referencedSet.contains(path) {
+                try? fm.removeItem(at: fileURL)
+            }
+        }
+    }
 }

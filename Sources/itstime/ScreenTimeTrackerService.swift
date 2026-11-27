@@ -20,6 +20,19 @@ public final class ScreenTimeTrackerService: ObservableObject {
     private let recordedDatesKey = "ItsTime_ScreenTime_RecordedDates"
     private let trackingEnabledKey = "ItsTime_ScreenTime_Enabled"
     
+    /// 屏幕时间独立文件存储目录（测试环境下隔离至临时目录，避免污染或读取真实用户数据）
+    private var storageDirectory: URL {
+        if NSClassFromString("XCTestCase") != nil ||
+            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ItsTimeTests_ScreenTime", isDirectory: true)
+            if !FileManager.default.fileExists(atPath: dir.path) {
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            }
+            return dir
+        }
+        return AppPreferences.appSupportDirectory(subpath: "ScreenTime")
+    }
+    
     // MARK: - 发布的响应式状态
     /// 今日总活跃屏幕时长（秒）
     @Published public private(set) var todayTotalSeconds: TimeInterval = 0
@@ -111,6 +124,7 @@ public final class ScreenTimeTrackerService: ObservableObject {
         let todayStr = Self.dateFormatter.string(from: Date())
         self.todayRecord = DailyScreenTimeRecord(dateString: todayStr)
         
+        migrateLegacyUserDefaultsRecordsIfNeeded()
         loadTodayRecord()
         setupNotifications()
         updateCurrentForegroundApp(isInitial: true)
@@ -872,7 +886,53 @@ public final class ScreenTimeTrackerService: ObservableObject {
         return list
     }
     
+    private func recordFileURL(for dateString: String) -> URL {
+        storageDirectory.appendingPathComponent("\(dateString).json")
+    }
+    
+    private func migrateLegacyUserDefaultsRecordsIfNeeded() {
+        let defaults = UserDefaults.standard
+        let recordedDates = defaults.stringArray(forKey: recordedDatesKey) ?? []
+        var keysToRemove: [String] = []
+        
+        for dateString in recordedDates {
+            let key = storageKeyPrefix + dateString
+            if let data = defaults.data(forKey: key) {
+                let fileURL = recordFileURL(for: dateString)
+                if !FileManager.default.fileExists(atPath: fileURL.path) {
+                    try? data.write(to: fileURL, options: .atomic)
+                }
+                keysToRemove.append(key)
+            }
+        }
+        
+        // 清理 UserDefaults 中其他遗留日期键
+        for (key, _) in defaults.dictionaryRepresentation() where key.hasPrefix(storageKeyPrefix + "20") {
+            let dateString = String(key.dropFirst(storageKeyPrefix.count))
+            if let data = defaults.data(forKey: key) {
+                let fileURL = recordFileURL(for: dateString)
+                if !FileManager.default.fileExists(atPath: fileURL.path) {
+                    try? data.write(to: fileURL, options: .atomic)
+                }
+            }
+            keysToRemove.append(key)
+        }
+        
+        for key in Set(keysToRemove) {
+            defaults.removeObject(forKey: key)
+        }
+        if !recordedDates.isEmpty {
+            defaults.removeObject(forKey: recordedDatesKey)
+        }
+    }
+    
     private func loadRecord(for dateString: String) -> DailyScreenTimeRecord? {
+        let fileURL = recordFileURL(for: dateString)
+        if let data = try? Data(contentsOf: fileURL),
+           let record = try? JSONDecoder().decode(DailyScreenTimeRecord.self, from: data) {
+            return record
+        }
+        // 兜底兼容：若文件不存在，检查 UserDefaults（如测试注入的旧键）
         let key = storageKeyPrefix + dateString
         guard let data = UserDefaults.standard.data(forKey: key),
               let record = try? JSONDecoder().decode(DailyScreenTimeRecord.self, from: data) else {
@@ -976,24 +1036,15 @@ public final class ScreenTimeTrackerService: ObservableObject {
     
     private func saveTodayRecord(force: Bool = false) {
         lastSaveDate = Date()
-        let key = storageKeyPrefix + todayRecord.dateString
+        let fileURL = recordFileURL(for: todayRecord.dateString)
         if let data = try? JSONEncoder().encode(todayRecord) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
-        
-        var recordedDates = UserDefaults.standard.stringArray(forKey: recordedDatesKey) ?? []
-        if !recordedDates.contains(todayRecord.dateString) {
-            recordedDates.append(todayRecord.dateString)
-            recordedDates.sort()
-            UserDefaults.standard.set(recordedDates, forKey: recordedDatesKey)
+            try? data.write(to: fileURL, options: .atomic)
         }
     }
     
     private func loadTodayRecord() {
         let todayStr = Self.dateFormatter.string(from: Date())
-        let key = storageKeyPrefix + todayStr
-        if let data = UserDefaults.standard.data(forKey: key),
-           let record = try? JSONDecoder().decode(DailyScreenTimeRecord.self, from: data) {
+        if let record = loadRecord(for: todayStr) {
             self.todayRecord = record
         } else {
             self.todayRecord = DailyScreenTimeRecord(dateString: todayStr)
@@ -1022,8 +1073,9 @@ public final class ScreenTimeTrackerService: ObservableObject {
         if Calendar.current.isDateInToday(anchorDate) {
             clearTodayData()
         } else {
-            let key = storageKeyPrefix + Self.dateFormatter.string(from: anchorDate)
-            UserDefaults.standard.removeObject(forKey: key)
+            let dateStr = Self.dateFormatter.string(from: anchorDate)
+            try? FileManager.default.removeItem(at: recordFileURL(for: dateStr))
+            UserDefaults.standard.removeObject(forKey: storageKeyPrefix + dateStr)
             refreshStats()
         }
     }

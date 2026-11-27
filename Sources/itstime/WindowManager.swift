@@ -8,6 +8,7 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     private var window: NSWindow?
     private var calendarSyncWindow: NSWindow?
     private var updateWindow: NSWindow?
+    private var preferencesWindow: NSWindow?
     
     public override init() {
         super.init()
@@ -105,6 +106,33 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     
     public func closeUpdateWindow() {
         updateWindow?.orderOut(nil)
+    }
+    
+    public func openPreferencesWindow() {
+        NSApplication.shared.setActivationPolicy(.regular)
+        
+        if let existing = preferencesWindow {
+            existing.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        let hostingController = NSHostingController(rootView: PreferencesView())
+        let newWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 370),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        newWindow.center()
+        newWindow.title = "偏好设置"
+        newWindow.contentViewController = hostingController
+        newWindow.isReleasedWhenClosed = false
+        newWindow.delegate = self
+        
+        self.preferencesWindow = newWindow
+        newWindow.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
     
     public func openScreenTimeWindow() {

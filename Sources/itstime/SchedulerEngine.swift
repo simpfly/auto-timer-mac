@@ -31,6 +31,7 @@ public final class SchedulerEngine: ObservableObject {
     private var isSystemSleeping: Bool = false
     private var isScreenAsleep: Bool = false
     private var isScreenLocked: Bool = false
+    private var wasDndActive: Bool = false
     private var sleepObserver: Any?
     private var wakeObserver: Any?
     private var screenSleepObserver: Any?
@@ -395,6 +396,25 @@ public final class SchedulerEngine: ObservableObject {
             lastTickDate = Date()
             return
         }
+        
+        // 临时免打扰期间：暂停所有触发与预告，到期后自动恢复并刷新周期（不补发）
+        if AppPreferences.shared.isDndActive {
+            wasDndActive = true
+            if pendingAudioAlert != nil {
+                AudioPreAlertHUD.shared.dismiss()
+                pendingAudioAlert = nil
+            }
+            activeCountdownSummary = nil
+            lastTickDate = Date()
+            return
+        } else if wasDndActive {
+            wasDndActive = false
+            AppPreferences.shared.clearDnd()
+            lastTickDate = Date()
+            cleanMissedTasksAfterWake()
+            return
+        }
+        
         let now = Date()
         let timeGap = now.timeIntervalSince(lastTickDate)
         lastTickDate = now
@@ -449,6 +469,7 @@ public final class SchedulerEngine: ObservableObject {
         }
         
         let calendar = Calendar.current
+        let preAlertSeconds = max(0, AppPreferences.shared.audioPreAlertSeconds)
         var firstActiveCountdown: (title: String, remaining: Int)? = nil
         var candidatePreAudioAlert: ScheduleTask? = nil
         
@@ -475,13 +496,13 @@ public final class SchedulerEngine: ObservableObject {
                 if case .playLocalAudio = tasks[index].action { return true }
                 return false
             }()
+            let usePreAlert = isAudioAction && preAlertSeconds > 0
             
             switch tasks[index].trigger {
             case .once(let date):
                 let diff = date.timeIntervalSince(now)
-                if isAudioAction {
-                    // 音频任务：距离触发 <= 5 秒且未严重超时（-30s 内），触发 5 秒预告卡片
-                    if diff <= 5.0 && diff >= -30 {
+                if usePreAlert {
+                    if diff <= Double(preAlertSeconds) && diff >= -30 {
                         if candidatePreAudioAlert == nil && self.pendingAudioAlert == nil {
                             candidatePreAudioAlert = tasks[index]
                         }
@@ -492,7 +513,7 @@ public final class SchedulerEngine: ObservableObject {
                         saveTasks()
                     }
                 } else {
-                    // 非音频任务：常规即时触发
+                    // 非音频任务或关闭预告：常规即时触发
                     if diff <= 0 {
                         var finished = tasks[index]
                         finished.lastTriggeredAt = now
@@ -515,15 +536,14 @@ public final class SchedulerEngine: ObservableObject {
                     firstActiveCountdown = (tasks[index].name, remaining)
                 }
                 
-                if isAudioAction {
-                    // 音频任务：当剩余秒数达到 5 秒以内（<= 5），启动 5 秒完整预告卡片
-                    if remaining <= 5 {
+                if usePreAlert {
+                    if remaining <= preAlertSeconds {
                         if candidatePreAudioAlert == nil && self.pendingAudioAlert == nil {
                             candidatePreAudioAlert = tasks[index]
                         }
                     }
                 } else {
-                    // 非音频任务：归零即触发
+                    // 归零即触发
                     if remaining <= 0 {
                         tasks[index].countdownRemainingSeconds = totalSeconds
                         tasks[index].lastTriggeredAt = now
@@ -546,9 +566,8 @@ public final class SchedulerEngine: ObservableObject {
                 } ?? false
                 
                 if !alreadyTriggeredToday {
-                    if isAudioAction {
-                        // 音频任务：提前 <= 5 秒且在容错窗口内启动 5 秒预告卡片
-                        if diff <= 5.0 && diff >= -15 {
+                    if usePreAlert {
+                        if diff <= Double(preAlertSeconds) && diff >= -15 {
                             if candidatePreAudioAlert == nil && self.pendingAudioAlert == nil {
                                 candidatePreAudioAlert = tasks[index]
                             }
@@ -571,9 +590,8 @@ public final class SchedulerEngine: ObservableObject {
                 let elapsed = now.timeIntervalSince(last)
                 let remaining = Double(intervalSeconds) - elapsed
                 
-                if isAudioAction {
-                    // 音频任务：提前 <= 5 秒且未严重超时启动 5 秒预告卡片
-                    if remaining <= 5.0 && remaining >= -30 {
+                if usePreAlert {
+                    if remaining <= Double(preAlertSeconds) && remaining >= -30 {
                         if candidatePreAudioAlert == nil && self.pendingAudioAlert == nil {
                             candidatePreAudioAlert = tasks[index]
                         }
@@ -582,7 +600,6 @@ public final class SchedulerEngine: ObservableObject {
                         tasks[index].lastTriggeredAt = now
                         saveTasks()
                     }
-                    // remaining > 5：正常等待，无需处理
                 } else {
                     if remaining <= 0 {
                         tasks[index].lastTriggeredAt = now
@@ -612,9 +629,27 @@ public final class SchedulerEngine: ObservableObject {
         }
     }
     
-    /// 启动音频任务 5 秒完整倒计时预告卡片
+    /// 启动音频任务倒计时预告卡片（根据偏好设置决定预告秒数）
     public func startAudioPreAlert(for task: ScheduleTask) {
-        self.pendingAudioAlert = (task: task, seconds: 5)
+        let seconds = max(1, AppPreferences.shared.audioPreAlertSeconds)
+        // 若处于全屏或会议避让中，跳过预告卡片并直接进入避让处理
+        if AppPreferences.shared.avoidanceEnabled && InterruptionGuard.shouldAvoidNow() {
+            if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
+                tasks[idx].lastTriggeredAt = Date()
+                if case .once = tasks[idx].trigger {
+                    tasks[idx].isEnabled = false
+                } else if case .countdown(let total) = tasks[idx].trigger {
+                    tasks[idx].countdownRemainingSeconds = total
+                }
+                saveTasks()
+            }
+            if AppPreferences.shared.avoidanceBehavior == .silentNotification {
+                notify(title: "定时提醒（已避让）", body: "「\(task.name)」时间已到", withSystemSound: false)
+            }
+            return
+        }
+        
+        self.pendingAudioAlert = (task: task, seconds: seconds)
         var audioName = ""
         if case .playLocalAudio(_, let name, _, _, _) = task.action {
             audioName = name
@@ -624,7 +659,7 @@ public final class SchedulerEngine: ObservableObject {
                 taskId: task.id,
                 taskName: task.name,
                 audioName: audioName,
-                secondsRemaining: 5
+                secondsRemaining: seconds
             )
         )
     }
@@ -671,6 +706,18 @@ public final class SchedulerEngine: ObservableObject {
     
     /// 执行动作（手动测试运行时不计入正式触发统计）
     public func executeAction(for task: ScheduleTask, isManualTest: Bool = false) {
+        // 全屏或会议场景自动避让（仅针对自动调度触发，手动测试不受影响）
+        if !isManualTest && AppPreferences.shared.avoidanceEnabled && InterruptionGuard.shouldAvoidNow() {
+            if AppPreferences.shared.avoidanceBehavior == .silentNotification {
+                notify(
+                    title: "定时提醒（已避让）",
+                    body: "「\(task.name)」时间已到",
+                    withSystemSound: false
+                )
+            }
+            return
+        }
+        
         // 1. 仅正式调度触发时计入统计与历史时间轴
         if !isManualTest {
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
@@ -784,11 +831,45 @@ public final class SchedulerEngine: ObservableObject {
     public func updateTask(_ task: ScheduleTask) {
         if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[idx] = task
+            cleanupOrphanedAudioFiles()
         }
     }
     
     public func deleteTask(byId id: UUID) {
         tasks.removeAll { $0.id == id }
+        cleanupOrphanedAudioFiles()
+    }
+    
+    private func cleanupOrphanedAudioFiles() {
+        let referencedPaths: [String] = tasks.compactMap { task in
+            if case .playLocalAudio(let path, _, _, _, _) = task.action {
+                return path
+            }
+            return nil
+        }
+        AudioService.cleanupOrphanedManagedAudio(referencedPaths: referencedPaths)
+    }
+    
+    // MARK: - 临时免打扰快捷操作
+    
+    public func enableDndForOneHour() {
+        AppPreferences.shared.enableDndForOneHour()
+        AudioService.shared.stop(fadeOut: false)
+        AudioPreAlertHUD.shared.dismiss()
+        pendingAudioAlert = nil
+    }
+    
+    public func enableDndUntilTomorrow() {
+        AppPreferences.shared.enableDndUntilTomorrow()
+        AudioService.shared.stop(fadeOut: false)
+        AudioPreAlertHUD.shared.dismiss()
+        pendingAudioAlert = nil
+    }
+    
+    public func clearDnd() {
+        AppPreferences.shared.clearDnd()
+        lastTickDate = Date()
+        cleanMissedTasksAfterWake()
     }
     
     public func toggleTaskEnabled(id: UUID) {
