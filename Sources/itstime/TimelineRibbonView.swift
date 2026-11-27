@@ -147,7 +147,7 @@ struct TimelineRibbonView: View {
                             isAlt: isAlt,
                             isHovered: hoveredEvent?.id == event.id,
                             onExecute: {
-                                scheduler.executeAction(for: event.task)
+                                scheduler.executeAction(for: event.task, isManualTest: true)
                             }
                         )
                         .position(x: posX, y: nodeY)
