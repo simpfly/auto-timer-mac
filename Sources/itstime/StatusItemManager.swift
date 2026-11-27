@@ -3,11 +3,14 @@ import SwiftUI
 import Combine
 
 @MainActor
-public final class StatusItemManager: NSObject, NSMenuDelegate {
+public final class StatusItemManager: NSObject, NSMenuDelegate, ObservableObject {
     public static let shared = StatusItemManager()
     
+    @Published private(set) var quickReminderRequest = 0
+
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var quickReminderPopover: NSPopover?
     private var cancellables = Set<AnyCancellable>()
     
     public var button: NSStatusBarButton? {
@@ -90,7 +93,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         
         // 当 Popover 正在展开展示时，保持 statusItem 布局与宽度绝对静止，
         // 严禁在展开期间变更 button 文本导致宽度伸缩，从而引起弹窗窗口横向位移/跳动！
-        if popover != nil && popover.isShown {
+        if (popover != nil && popover.isShown) || quickReminderPopover?.isShown == true {
             return
         }
         
@@ -172,6 +175,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     
     /// 展开主面板展示
     public func openPopover() {
+        quickReminderPopover?.performClose(nil)
         guard let button = statusItem.button else { return }
         if !popover.isShown {
             NSApplication.shared.activate(ignoringOtherApps: true)
@@ -179,8 +183,31 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
         }
     }
     
+    /// 所有新建提醒入口复用菜单栏中的快捷设置面板。
+    public func openQuickReminder() {
+        guard let button = statusItem?.button else { return }
+        if popover.isShown { popover.performClose(nil) }
+        if quickReminderPopover == nil {
+            let panel = NSPopover()
+            panel.behavior = .transient
+            panel.animates = false
+            panel.delegate = self
+            panel.contentViewController = NSHostingController(rootView: QuickReminderPopoverView())
+            panel.setValue(true, forKeyPath: "shouldHideAnchor")
+            quickReminderPopover = panel
+        }
+        guard let panel = quickReminderPopover else { return }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        if !panel.isShown {
+            panel.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+        panel.contentViewController?.view.window?.makeKey()
+        quickReminderRequest += 1
+    }
+
     /// 切换左键主面板展示
     public func togglePopover() {
+        quickReminderPopover?.performClose(nil)
         guard let button = statusItem.button else { return }
         
         if popover.isShown {
@@ -193,6 +220,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     
     /// 关闭主面板
     public func closePopover() {
+        quickReminderPopover?.performClose(nil)
         if popover.isShown {
             popover.performClose(nil)
         }
@@ -200,6 +228,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     
     /// 弹出右键快捷菜单
     public func showContextMenu() {
+        quickReminderPopover?.performClose(nil)
         if popover.isShown {
             popover.performClose(nil)
         }
@@ -219,6 +248,15 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     // MARK: - 构建右键快捷菜单
     private func buildContextMenu() -> NSMenu {
         let menu = NSMenu(title: "ItsTimeContextMenu")
+        let newReminderItem = NSMenuItem(
+            title: "新建提醒…",
+            action: #selector(openNewReminder),
+            keyEquivalent: "n"
+        )
+        newReminderItem.target = self
+        newReminderItem.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
+        menu.addItem(newReminderItem)
+        menu.addItem(NSMenuItem.separator())
         
         // 1. 打开独立主窗口
         let mainWindowItem = NSMenuItem(
@@ -345,6 +383,10 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     }
     
     // MARK: - 菜单 Action 响应
+    @objc private func openNewReminder() {
+        WindowManager.shared.openNewReminder()
+    }
+
     @objc private func openScreenTime() {
         closePopover()
         WindowManager.shared.openMainWindow()

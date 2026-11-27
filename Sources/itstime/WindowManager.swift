@@ -14,6 +14,10 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     public override init() {
         super.init()
     }
+
+    public func openNewReminder() {
+        StatusItemManager.shared.openQuickReminder()
+    }
     
     public func openMainWindow() {
         NSApplication.shared.setActivationPolicy(.regular)

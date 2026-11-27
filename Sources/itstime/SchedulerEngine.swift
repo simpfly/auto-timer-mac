@@ -26,6 +26,8 @@ public final class SchedulerEngine: ObservableObject {
     /// 当前在菜单栏窗口内弹出的文本提示
     @Published public var activeTextAlert: TextAlertItem? = nil
     
+    private var pendingTextCountdowns: Set<UUID> = []
+
     private var ticker: AnyCancellable?
     private var lastTickDate: Date = Date()
     private var isSystemSleeping: Bool = false
@@ -180,6 +182,7 @@ public final class SchedulerEngine: ObservableObject {
         
         for index in tasks.indices {
             guard tasks[index].isEnabled && !tasks[index].isPaused else { continue }
+            guard !pendingTextCountdowns.contains(tasks[index].id) else { continue }
             
             switch tasks[index].trigger {
             case .once(let date):
@@ -475,6 +478,7 @@ public final class SchedulerEngine: ObservableObject {
         
         for index in tasks.indices {
             guard tasks[index].isEnabled && !tasks[index].isPaused else { continue }
+            guard !pendingTextCountdowns.contains(tasks[index].id) else { continue }
             
             // 刚在本轮预告完成触发的任务，跳过当轮后续检查，等待下一个周期
             if tasks[index].id == justTriggeredTaskId {
@@ -752,7 +756,12 @@ public final class SchedulerEngine: ObservableObject {
                     taskColor = .teal
                 }
                 // 纯文本提醒：在菜单栏图标下方弹出专属提醒卡片，等待用户确认
-                TextAlertHUD.shared.show(title: task.name, message: alertMsg, color: taskColor)
+                let waitsForConfirmation = !isManualTest && beginWaitingForTextConfirmation(taskID: task.id)
+                TextAlertHUD.shared.show(title: task.name, message: alertMsg, color: taskColor) { [weak self] in
+                    if waitsForConfirmation {
+                        self?.confirmTextCountdown(taskID: task.id)
+                    }
+                }
             } else {
                 PopupHUDManager.shared.show(for: task, mode: mode)
             }
@@ -918,6 +927,25 @@ public final class SchedulerEngine: ObservableObject {
         }
     }
     
+    /// 仅实际展示的倒计时文本提醒等待确认；手动测试和被避让的提醒不进入等待。
+    @discardableResult
+    func beginWaitingForTextConfirmation(taskID: UUID) -> Bool {
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }),
+              case .countdown = tasks[index].trigger,
+              case .popupContent(.textNotification) = tasks[index].action else { return false }
+        pendingTextCountdowns.insert(taskID)
+        tasks[index].countdownRemainingSeconds = 0
+        return true
+    }
+
+    func confirmTextCountdown(taskID: UUID) {
+        guard pendingTextCountdowns.remove(taskID) != nil,
+              let index = tasks.firstIndex(where: { $0.id == taskID }),
+              case .countdown(let totalSeconds) = tasks[index].trigger else { return }
+        tasks[index].countdownRemainingSeconds = totalSeconds
+        // 保留用户在等待期间主动设置的暂停或停用状态。
+    }
+
     /// 关闭菜单栏当前弹出的文本提示
     public func dismissTextAlert() {
         activeTextAlert = nil

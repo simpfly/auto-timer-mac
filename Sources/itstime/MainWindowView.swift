@@ -6,7 +6,6 @@ struct MainWindowView: View {
     @ObservedObject var audioService = AudioService.shared
     @ObservedObject var updateManager = UpdateManager.shared
     
-    @State private var showingEditor: Bool = false
     @State private var showingCalendarSync: Bool = false
     @State private var editingTask: ScheduleTask? = nil
     @State private var syncToastMessage: String? = nil
@@ -121,16 +120,6 @@ struct MainWindowView: View {
             }
         }
         .frame(minWidth: 540, minHeight: 500)
-        .sheet(isPresented: $showingEditor) {
-            TaskEditorSheet(editingTask: editingTask, onSave: { updated in
-                if editingTask != nil {
-                    scheduler.updateTask(updated)
-                } else {
-                    scheduler.addTask(updated)
-                }
-                editingTask = nil
-            })
-        }
         .sheet(isPresented: $showingCalendarSync) {
             CalendarSyncSheet()
         }
@@ -282,7 +271,7 @@ struct MainWindowView: View {
             
             Button("新建任务") {
                 editingTask = nil
-                showingEditor = true
+                WindowManager.shared.openNewReminder()
             }
             .buttonStyle(.bordered)
             .controlSize(.small)

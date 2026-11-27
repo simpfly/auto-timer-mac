@@ -45,6 +45,8 @@ public struct PreferencesView: View {
                 .foregroundColor(.secondary)
             
             VStack(spacing: 0) {
+                ReminderShortcutSetting()
+                Divider().padding(.leading, 14)
                 HStack {
                     Label("开机自启动", systemImage: "power.circle")
                         .font(.system(size: 13))

@@ -65,6 +65,7 @@ struct QuickTaskCreateView: View {
     
     // 时间带宽度
     public var timelineWidth: CGFloat
+    private var focusRequest: Int
     
     // 基本状态
     @State private var taskTitle: String = ""
@@ -129,9 +130,10 @@ struct QuickTaskCreateView: View {
         return eventKit.search(query: taskTitle)
     }
     
-    public init(editingTask: Binding<ScheduleTask?> = .constant(nil), timelineWidth: CGFloat = 200) {
+    public init(editingTask: Binding<ScheduleTask?> = .constant(nil), timelineWidth: CGFloat = 200, focusRequest: Int = 0) {
         self._editingTask = editingTask
         self.timelineWidth = timelineWidth
+        self.focusRequest = focusRequest
     }
     
     var body: some View {
@@ -295,6 +297,13 @@ struct QuickTaskCreateView: View {
                 applyPrefilledDraft(draft)
                 eventKit.prefilledDraft = nil
             }
+        }
+        .task(id: focusRequest) {
+            guard focusRequest > 0 else { return }
+            isActionPickerExpanded = false
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            isTitleFocused = true
         }
         .onChange(of: eventKit.prefilledDraft) { draft in
             if let draft = draft {

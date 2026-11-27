@@ -110,6 +110,41 @@ final class SchedulerEngineTests: XCTestCase {
         XCTAssertTrue(engine.tasks.allSatisfy { !$0.isPaused })
     }
     
+    func testTextCountdownWaitsThroughTicksAndWakeUntilConfirmed() {
+        let task = ScheduleTask(name: "确认后重计时", trigger: .countdown(totalSeconds: 60),
+                                action: .popupContent(mode: .textNotification(message: "休息")))
+        engine.tasks = [task]
+        XCTAssertTrue(engine.beginWaitingForTextConfirmation(taskID: task.id))
+        engine.onTick()
+        engine.onTick()
+        engine.cleanMissedTasksAfterWake()
+        XCTAssertEqual(engine.tasks[0].countdownRemainingSeconds, 0)
+        XCTAssertEqual(engine.tasks[0].effectiveTriggerCount, 0)
+        engine.confirmTextCountdown(taskID: task.id)
+        XCTAssertEqual(engine.tasks[0].countdownRemainingSeconds, 60)
+        engine.tasks[0].countdownRemainingSeconds = 59
+        engine.confirmTextCountdown(taskID: task.id)
+        XCTAssertEqual(engine.tasks[0].countdownRemainingSeconds, 59)
+    }
+
+    func testTextCountdownConfirmationPreservesPauseAndIsIndependent() {
+        let first = ScheduleTask(name: "一", trigger: .countdown(totalSeconds: 60),
+                                 action: .popupContent(mode: .textNotification(message: "一")))
+        let second = ScheduleTask(name: "二", trigger: .countdown(totalSeconds: 120),
+                                  action: .popupContent(mode: .textNotification(message: "二")))
+        engine.tasks = [first, second]
+        engine.beginWaitingForTextConfirmation(taskID: first.id)
+        engine.beginWaitingForTextConfirmation(taskID: second.id)
+        engine.toggleTaskPause(id: first.id)
+        engine.confirmTextCountdown(taskID: first.id)
+        XCTAssertTrue(engine.tasks[0].isPaused)
+        XCTAssertEqual(engine.tasks[0].countdownRemainingSeconds, 60)
+        XCTAssertEqual(engine.tasks[1].countdownRemainingSeconds, 0)
+        engine.deleteTask(byId: second.id)
+        engine.confirmTextCountdown(taskID: second.id)
+        XCTAssertEqual(engine.tasks.count, 1)
+    }
+
     // MARK: - 文本弹窗提示关闭测试
     func testDismissTextAlert() {
         engine.activeTextAlert = TextAlertItem(title: "提示", message: "该休息了")

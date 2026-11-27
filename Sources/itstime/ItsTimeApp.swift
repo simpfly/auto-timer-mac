@@ -17,6 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         
         // 初始化状态栏管理：接管系统菜单栏常驻、左键 Popover 与右键快捷上下文菜单
         StatusItemManager.shared.setup()
+        GlobalReminderShortcut.shared.start()
         
         // 启动时自动展开菜单栏主面板，让用户直观看到当前界面
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -54,7 +55,22 @@ struct ItsTimeApp: App {
     
     var body: some Scene {
         Settings {
-            EmptyView()
+            PreferencesView()
+        }
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("新建提醒…") {
+                    WindowManager.shared.openNewReminder()
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button("偏好设置…") {
+                    StatusItemManager.shared.closePopover()
+                    WindowManager.shared.openPreferencesWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
     }
 }

@@ -7,6 +7,15 @@ public final class TextAlertHUD: ObservableObject {
     fileprivate static let cardWidth: CGFloat = 296
     fileprivate static let cornerRadius: CGFloat = 16
     
+    private struct QueuedAlert {
+        let title: String
+        let message: String
+        let color: Color
+        let onConfirm: () -> Void
+    }
+    private var queuedAlerts: [QueuedAlert] = []
+    private var currentConfirmation: (() -> Void)?
+    private var isDismissing = false
     private var alertWindow: NSPanel?
     @Published public var currentTitle: String = ""
     @Published public var currentMessage: String = ""
@@ -15,7 +24,12 @@ public final class TextAlertHUD: ObservableObject {
     public init() {}
     
     /// 展示纯文本提醒弹窗卡片（在状态栏图标正下方微弹弹出，必须等待用户确认才关闭）
-    public func show(title: String, message: String, color: Color = .accentColor) {
+    public func show(title: String, message: String, color: Color = .accentColor, onConfirm: @escaping () -> Void = {}) {
+        if currentConfirmation != nil || isDismissing {
+            queuedAlerts.append(QueuedAlert(title: title, message: message, color: color, onConfirm: onConfirm))
+            return
+        }
+        currentConfirmation = onConfirm
         self.currentTitle = title.isEmpty ? "定时提醒" : title
         self.currentMessage = message.isEmpty ? "时间已到" : message
         self.currentColor = color
@@ -105,7 +119,11 @@ public final class TextAlertHUD: ObservableObject {
     
     /// 用户点击确认或关闭（轻微上收淡出）
     public func dismiss() {
-        guard let window = alertWindow, window.isVisible else { return }
+        guard let window = alertWindow, window.isVisible, !isDismissing else { return }
+        isDismissing = true
+        let confirmation = currentConfirmation
+        currentConfirmation = nil
+        confirmation?()
         
         let exitFrame = NSRect(
             x: window.frame.origin.x,
@@ -120,7 +138,15 @@ public final class TextAlertHUD: ObservableObject {
             window.animator().alphaValue = 0.0
             window.animator().setFrame(exitFrame, display: true)
         }, completionHandler: {
-            window.orderOut(nil)
+            Task { @MainActor [weak self] in
+                window.orderOut(nil)
+                guard let self else { return }
+                self.isDismissing = false
+                if !self.queuedAlerts.isEmpty {
+                    let next = self.queuedAlerts.removeFirst()
+                    self.show(title: next.title, message: next.message, color: next.color, onConfirm: next.onConfirm)
+                }
+            }
         })
     }
     
