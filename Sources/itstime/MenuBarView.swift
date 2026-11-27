@@ -126,7 +126,6 @@ struct MenuBarView: View {
             }
         }
         .frame(width: 380, height: 540)
-        .background(.regularMaterial)
         .sheet(isPresented: $showingEditor) {
             TaskEditorSheet(editingTask: editingTask, onSave: { updated in
                 if editingTask != nil {

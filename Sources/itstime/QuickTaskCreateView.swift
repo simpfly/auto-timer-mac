@@ -283,12 +283,7 @@ struct QuickTaskCreateView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.55))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(editingTask != nil ? Color.accentColor.opacity(0.4) : Color.primary.opacity(0.08), lineWidth: editingTask != nil ? 1.2 : 0.8)
-        )
+        .glassCard(cornerRadius: 12, isSpotlight: editingTask != nil)
     }
     .onAppear {
             eventKit.checkPermissions()

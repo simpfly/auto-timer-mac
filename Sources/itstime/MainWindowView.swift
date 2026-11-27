@@ -48,8 +48,8 @@ struct MainWindowView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            // 原生透气毛玻璃背景
-            GlassBackgroundView(material: .underWindowBackground, blendingMode: .behindWindow)
+            // 原生清亮毛玻璃背景（避免 underWindowBackground 沉闷发灰）
+            GlassBackgroundView(material: .popover, blendingMode: .behindWindow)
                 .ignoresSafeArea()
             
             if currentPage == .screenTime {
@@ -571,7 +571,7 @@ struct TaskCardView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .glassCard(cornerRadius: 10, isSpotlight: false, isPaused: task.isPaused, isEnabled: task.isEnabled)
+        .glassCard(cornerRadius: 10, isSpotlight: false, isPaused: task.isPaused, isEnabled: task.isEnabled, isHovered: isHovered)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture(count: 2) { onEdit() }

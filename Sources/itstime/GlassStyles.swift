@@ -20,55 +20,83 @@ public struct GlassBackgroundView: NSViewRepresentable {
     public func makeNSView(context: Context) -> NSVisualEffectView {
         let visualEffectView = NSVisualEffectView()
         visualEffectView.material = material
-        visualEffectView.blendingMode = .withinWindow
+        visualEffectView.blendingMode = blendingMode
         visualEffectView.state = state
         return visualEffectView
     }
     
     public func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
-        nsView.blendingMode = .withinWindow
+        nsView.blendingMode = blendingMode
         nsView.state = state
     }
 }
 
-// MARK: - SwiftUI 原生 Glass 修饰符
+// MARK: - SwiftUI 原生 Glass 修饰符（通透磨砂 + 顶部高光折光 + 柔和景深）
 public struct GlassCardModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    
     public var cornerRadius: CGFloat = 12
     public var isSpotlight: Bool = false
     public var isPaused: Bool = false
     public var isEnabled: Bool = true
+    public var isHovered: Bool = false
     
     public func body(content: Content) -> some View {
+        let isDark = colorScheme == .dark
+        let tintColor: Color = isSpotlight
+            ? (isPaused ? Color.orange.opacity(isDark ? 0.12 : 0.06) : Color.accentColor.opacity(isDark ? 0.10 : 0.045))
+            : Color.clear
+        
+        // 外层容器已提供原生毛玻璃模糊，卡片自身不再嵌套 Material 以避免多层发灰，
+        // 改用纯净半透明高光渐变，呈现清澈通透的玻璃质感。
+        let topSheen = isDark
+            ? Color.white.opacity(isHovered ? 0.14 : 0.10)
+            : Color.white.opacity(isHovered ? 0.82 : (isEnabled ? 0.72 : 0.48))
+        let bottomSheen = isDark
+            ? Color.white.opacity(isHovered ? 0.07 : 0.045)
+            : Color.white.opacity(isHovered ? 0.62 : (isEnabled ? 0.50 : 0.34))
+        
+        let topBorder = isDark
+            ? Color.white.opacity(isHovered ? 0.28 : (isEnabled ? 0.20 : 0.10))
+            : Color.white.opacity(isHovered ? 0.95 : (isEnabled ? 0.88 : 0.55))
+        let bottomBorder = isDark
+            ? Color.white.opacity(0.05)
+            : Color.black.opacity(isEnabled ? 0.06 : 0.03)
+        
         content
+            .background(tintColor)
             .background(
-                isSpotlight
-                    ? (isPaused ? Color.orange.opacity(0.06) : Color.accentColor.opacity(0.05))
-                    : Color(NSColor.controlBackgroundColor).opacity(0.5)
+                LinearGradient(
+                    colors: [topSheen, bottomSheen],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             )
-            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        isSpotlight
-                            ? (isPaused ? Color.orange.opacity(0.22) : Color.primary.opacity(0.09))
-                            : Color.primary.opacity(isEnabled ? 0.08 : 0.04),
-                        lineWidth: 0.8
+                        LinearGradient(
+                            colors: [topBorder, bottomBorder],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.9
                     )
             )
             .shadow(
-                color: isSpotlight ? Color.black.opacity(0.05) : Color.black.opacity(0.03),
-                radius: isSpotlight ? 6 : 3,
+                color: Color.black.opacity(isDark ? (isSpotlight ? 0.26 : 0.16) : (isSpotlight ? 0.06 : 0.035)),
+                radius: isSpotlight ? 10 : (isHovered ? 7 : 4),
                 x: 0,
-                y: isSpotlight ? 2 : 1.5
+                y: isSpotlight ? 4 : (isHovered ? 3 : 1.5)
             )
     }
 }
 
 public extension View {
-    func glassCard(cornerRadius: CGFloat = 12, isSpotlight: Bool = false, isPaused: Bool = false, isEnabled: Bool = true) -> some View {
-        self.modifier(GlassCardModifier(cornerRadius: cornerRadius, isSpotlight: isSpotlight, isPaused: isPaused, isEnabled: isEnabled))
+    func glassCard(cornerRadius: CGFloat = 12, isSpotlight: Bool = false, isPaused: Bool = false, isEnabled: Bool = true, isHovered: Bool = false) -> some View {
+        self.modifier(GlassCardModifier(cornerRadius: cornerRadius, isSpotlight: isSpotlight, isPaused: isPaused, isEnabled: isEnabled, isHovered: isHovered))
     }
     
     // 兼容历史调用
