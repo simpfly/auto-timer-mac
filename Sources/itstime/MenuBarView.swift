@@ -375,13 +375,7 @@ struct SharedMoreMenuContent: View {
         }
         
         Button {
-            NSApplication.shared.activate(ignoringOtherApps: true)
-            NSApplication.shared.orderFrontStandardAboutPanel(
-                options: [
-                    NSApplication.AboutPanelOptionKey.applicationName: "It's Time",
-                    NSApplication.AboutPanelOptionKey.version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-                ]
-            )
+            WindowManager.shared.openAboutWindow()
         } label: {
             let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
             Label("关于 It's Time (v\(appVersion))", systemImage: "info.circle")

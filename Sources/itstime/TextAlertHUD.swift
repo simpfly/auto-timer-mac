@@ -4,6 +4,8 @@ import AppKit
 @MainActor
 public final class TextAlertHUD: ObservableObject {
     public static let shared = TextAlertHUD()
+    fileprivate static let cardWidth: CGFloat = 296
+    fileprivate static let cornerRadius: CGFloat = 16
     
     private var alertWindow: NSPanel?
     @Published public var currentTitle: String = ""
@@ -67,13 +69,13 @@ public final class TextAlertHUD: ObservableObject {
     
     private func calculateTargetFrame(window: NSPanel) -> NSRect {
         guard let hosting = window.contentViewController as? NSHostingController<TextAlertBubbleView> else {
-            return NSRect(x: 0, y: 0, width: 290, height: 120)
+            return NSRect(x: 0, y: 0, width: Self.cardWidth, height: 120)
         }
         
         // 强制重新计算并设定 SwiftUI 真实所需尺寸，杜绝高度测量滞后导致的向上偏移截断
         hosting.view.layoutSubtreeIfNeeded()
-        let fittingSize = hosting.sizeThatFits(in: CGSize(width: 290, height: CGFloat.greatestFiniteMagnitude))
-        let cardWidth: CGFloat = 290
+        let fittingSize = hosting.sizeThatFits(in: CGSize(width: Self.cardWidth, height: CGFloat.greatestFiniteMagnitude))
+        let cardWidth = Self.cardWidth
         let cardHeight: CGFloat = max(110, fittingSize.height)
         
         let screen = StatusItemManager.shared.button?.window?.screen ?? NSScreen.main ?? NSScreen.screens[0]
@@ -126,7 +128,7 @@ public final class TextAlertHUD: ObservableObject {
         let hosting = NSHostingController(rootView: TextAlertBubbleView())
         
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 290, height: 120),
+            contentRect: NSRect(x: 0, y: 0, width: Self.cardWidth, height: 120),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -138,6 +140,12 @@ public final class TextAlertHUD: ObservableObject {
         panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.contentViewController = hosting
+        // Clip the native hosting surface too, so material backing cannot fill the corners.
+        hosting.view.wantsLayer = true
+        hosting.view.layer?.backgroundColor = NSColor.clear.cgColor
+        hosting.view.layer?.cornerRadius = Self.cornerRadius
+        hosting.view.layer?.cornerCurve = .continuous
+        hosting.view.layer?.masksToBounds = true
         
         self.alertWindow = panel
     }
@@ -199,7 +207,7 @@ struct TextAlertBubbleView: View {
             }
         }
         .padding(16)
-        .frame(width: 296)
-        .glassHUD(cornerRadius: 16, accentColor: hud.currentColor)
+        .frame(width: TextAlertHUD.cardWidth)
+        .glassHUD(cornerRadius: TextAlertHUD.cornerRadius, accentColor: hud.currentColor, drawsShadow: false)
     }
 }

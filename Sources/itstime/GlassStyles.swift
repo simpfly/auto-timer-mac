@@ -115,13 +115,13 @@ public extension View {
     }
     
     /// 统一桌面提醒浮窗 HUD 容器规范（毛玻璃材质、渐变描边、柔和投影）
-    func glassHUD(cornerRadius: CGFloat = 16, accentColor: Color? = nil) -> some View {
+    func glassHUD(cornerRadius: CGFloat = 16, accentColor: Color? = nil, drawsShadow: Bool = true) -> some View {
         self
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
+                    .strokeBorder(
                         LinearGradient(
                             colors: [
                                 (accentColor ?? Color.white).opacity(accentColor != nil ? 0.32 : 0.28),
@@ -133,7 +133,7 @@ public extension View {
                         lineWidth: 0.9
                     )
             )
-            .shadow(color: Color.black.opacity(0.18), radius: 20, x: 0, y: 10)
+            .shadow(color: Color.black.opacity(drawsShadow ? 0.18 : 0), radius: drawsShadow ? 20 : 0, x: 0, y: drawsShadow ? 10 : 0)
     }
     
     /// 轻量即时毛玻璃悬浮提示（替代系统原生延迟 .help）

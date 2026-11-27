@@ -357,13 +357,7 @@ public final class StatusItemManager: NSObject, NSMenuDelegate {
     }
     
     @objc private func showAbout() {
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        NSApplication.shared.orderFrontStandardAboutPanel(
-            options: [
-                NSApplication.AboutPanelOptionKey.applicationName: "It's Time",
-                NSApplication.AboutPanelOptionKey.version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-            ]
-        )
+        WindowManager.shared.openAboutWindow()
     }
     
     @objc private func openMainWindow() {

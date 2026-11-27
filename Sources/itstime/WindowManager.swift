@@ -9,6 +9,7 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     private var calendarSyncWindow: NSWindow?
     private var updateWindow: NSWindow?
     private var preferencesWindow: NSWindow?
+    private var aboutWindow: NSWindow?
     
     public override init() {
         super.init()
@@ -135,6 +136,27 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
     
+    public func openAboutWindow() {
+        StatusItemManager.shared.closePopover()
+        NSApplication.shared.setActivationPolicy(.regular)
+
+        if let existing = aboutWindow {
+            existing.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let newWindow = NSWindow(contentViewController: NSHostingController(rootView: AboutView()))
+        newWindow.styleMask = [.titled, .closable]
+        newWindow.title = "关于 It's Time"
+        newWindow.isReleasedWhenClosed = false
+        newWindow.delegate = self
+        newWindow.center()
+        aboutWindow = newWindow
+        newWindow.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
     public func openScreenTimeWindow() {
         StatusItemManager.shared.closePopover()
         openMainWindow()
