@@ -20,7 +20,7 @@ for size in [16, 32, 128, 256, 512] {
         try run("/usr/bin/sips", ["-z", pixels, pixels, source, "--out", output])
     }
 }
-for output in ["AppIcon_1024.png", "assets/icon.png"] {
+for output in ["AppIcon_1024.png"] {
     try run("/usr/bin/sips", ["-z", "1024", "1024", source, "--out", root.appendingPathComponent(output).path])
 }
 // Package the PNG representations directly into the standard ICNS container.
@@ -43,3 +43,13 @@ var container = Data("icns".utf8)
 container.append(lengthBytes(body.count + 8))
 container.append(body)
 try container.write(to: root.appendingPathComponent("AppIcon.icns"))
+
+// Web surfaces use a tight canvas; macOS app icons keep their native padding.
+// Bounds of the white tile in the approved 1254 × 1254 source, in pixels.
+let webSource = root.appendingPathComponent("assets/AppIcon-web-source.png")
+try run("/usr/bin/sips", ["--cropToHeightWidth", "980", "980", "--cropOffset", "145", "125", source, "--out", webSource.path])
+for output in ["assets/icon.png", "docs/assets/icon.png", "docs/assets/icon-transparent.png", "launch-video/assets/icon.png"] {
+    let destination = root.appendingPathComponent(output)
+    try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try run("/usr/bin/sips", ["-z", "1024", "1024", webSource.path, "--out", destination.path])
+}

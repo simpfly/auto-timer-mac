@@ -304,19 +304,82 @@ final class ScreenTimeTrackerTests: XCTestCase {
         )
         engine.tasks.append(task)
         
-        // 1. 预告卡片点击【不播放】不应记录触发次数与日志
+        // 1. 预告卡片点击【不播放】如实记录为「已忽略」
         engine.startAudioPreAlert(for: task)
         engine.skipAudioPreAlert()
-        XCTAssertEqual(tracker.todayTotalEventTriggerCount, 0)
-        XCTAssertTrue(tracker.currentStats.pastEventLogs.isEmpty)
-        XCTAssertEqual(engine.tasks.first(where: { $0.id == taskId })?.effectiveTriggerCount, 0)
+        XCTAssertEqual(tracker.todayTotalEventTriggerCount, 1)
+        XCTAssertEqual(tracker.currentStats.pastEventLogs.count, 1)
+        XCTAssertEqual(tracker.currentStats.pastEventLogs.first?.effectiveIsIgnored, true)
+        XCTAssertEqual(tracker.currentStats.sortedEventTriggers.first?.effectiveIgnoredCount, 1)
+        XCTAssertEqual(tracker.currentStats.sortedEventTriggers.first?.effectiveDoneCount, 0)
+        XCTAssertEqual(engine.tasks.first(where: { $0.id == taskId })?.effectiveTriggerCount, 1)
         
         // 2. 卡片点击【测试运行】不应记录正式触发次数与日志
         engine.executeAction(for: task, isManualTest: true)
-        XCTAssertEqual(tracker.todayTotalEventTriggerCount, 0)
-        XCTAssertTrue(tracker.currentStats.pastEventLogs.isEmpty)
-        XCTAssertEqual(engine.tasks.first(where: { $0.id == taskId })?.effectiveTriggerCount, 0)
+        XCTAssertEqual(tracker.todayTotalEventTriggerCount, 1)
+        XCTAssertEqual(tracker.currentStats.pastEventLogs.count, 1)
+        XCTAssertEqual(engine.tasks.first(where: { $0.id == taskId })?.effectiveTriggerCount, 1)
         
         engine.tasks.removeAll(where: { $0.id == taskId })
+    }
+    
+    @MainActor
+    func testEventLogIgnoreAndDoneTracking() throws {
+        let tracker = ScreenTimeTrackerService.shared
+        tracker.clearTodayData()
+        
+        let task = ScheduleTask(
+            name: "喝水提醒",
+            trigger: .interval(intervalSeconds: 1800),
+            action: .popupContent(mode: .textNotification(message: "喝杯水"))
+        )
+        
+        let logId1 = try XCTUnwrap(tracker.recordEventTrigger(for: task))
+        let logId2 = try XCTUnwrap(tracker.recordEventTrigger(for: task))
+        XCTAssertNotEqual(logId1, logId2)
+        
+        // 将第二次触发标记为忽略（幂等验证：重复调用不应重复累加）
+        tracker.markEventLogIgnored(logId: logId2)
+        tracker.markEventLogIgnored(logId: logId2)
+        
+        let stats = tracker.currentStats
+        XCTAssertEqual(stats.pastEventLogs.count, 2)
+        XCTAssertEqual(stats.pastEventLogs.first(where: { $0.id == logId1 })?.effectiveIsIgnored, false)
+        XCTAssertEqual(stats.pastEventLogs.first(where: { $0.id == logId2 })?.effectiveIsIgnored, true)
+        
+        let triggerRecord = try XCTUnwrap(stats.sortedEventTriggers.first(where: { $0.id == task.id }))
+        XCTAssertEqual(triggerRecord.count, 2)
+        XCTAssertEqual(triggerRecord.effectiveIgnoredCount, 1)
+        XCTAssertEqual(triggerRecord.effectiveDoneCount, 1)
+    }
+    
+    func testLegacyEventRecordDecodingWithoutIgnoredFields() throws {
+        let legacyLogJSON = """
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "taskName": "旧版提醒",
+            "triggerTypeTitle": "每 30 分钟",
+            "timestamp": 0,
+            "kindString": "interval",
+            "actionDesc": "文本提示"
+        }
+        """.data(using: .utf8)!
+        let decodedLog = try JSONDecoder().decode(PastEventLogItem.self, from: legacyLogJSON)
+        XCTAssertNil(decodedLog.isIgnored)
+        XCTAssertFalse(decodedLog.effectiveIsIgnored)
+        
+        let legacyTriggerJSON = """
+        {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "taskName": "旧版提醒",
+            "triggerTypeTitle": "每 30 分钟",
+            "count": 3,
+            "lastTriggeredAt": 0
+        }
+        """.data(using: .utf8)!
+        let decodedTrigger = try JSONDecoder().decode(EventTriggerRecord.self, from: legacyTriggerJSON)
+        XCTAssertNil(decodedTrigger.ignoredCount)
+        XCTAssertEqual(decodedTrigger.effectiveIgnoredCount, 0)
+        XCTAssertEqual(decodedTrigger.effectiveDoneCount, 3)
     }
 }

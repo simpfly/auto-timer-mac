@@ -67,6 +67,7 @@ public final class PopupHUDManager: ObservableObject {
     
     public func close() {
         guard let window = hudWindow else { return }
+        window.makeFirstResponder(nil)
         let exitFrame = NSRect(
             x: window.frame.origin.x,
             y: window.frame.origin.y + 4,

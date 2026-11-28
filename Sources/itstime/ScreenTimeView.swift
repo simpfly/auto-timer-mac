@@ -318,6 +318,16 @@ public struct ScreenTimeView: View {
             if events.isEmpty {
                 emptyPlaceholder(systemImage: "bell.slash")
             } else {
+                let totalIgnored = events.reduce(0) { $0 + $1.effectiveIgnoredCount }
+                let totalDone = events.reduce(0) { $0 + $1.effectiveDoneCount }
+                if totalIgnored > 0 {
+                    EventExecutionProportionStrip(
+                        doneCount: totalDone,
+                        ignoredCount: totalIgnored
+                    )
+                    .padding(.bottom, 2)
+                }
+                
                 let maxCount = max(1, events.first?.count ?? 1)
                 ForEach(events) { event in
                     let ratio = CGFloat(event.count) / CGFloat(maxCount)
@@ -339,9 +349,20 @@ public struct ScreenTimeView: View {
                         
                         Spacer()
                         
-                        Text("\(event.count)")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundColor(kind.color)
+                        if event.effectiveIgnoredCount > 0 {
+                            HStack(spacing: 6) {
+                                Text("\(event.effectiveDoneCount)")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundColor(kind.color)
+                                Text("· \(event.effectiveIgnoredCount) 忽略")
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            Text("\(event.count)")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundColor(kind.color)
+                        }
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -831,9 +852,9 @@ struct ScreenTimeProportionStrip: View {
                 
                 HStack(spacing: gap) {
                     // 左方框：屏幕活跃时间（蓝色）
-                    proportionBox(
+                    ProportionSegmentBox(
                         title: "活跃",
-                        durationText: activeText,
+                        valueText: activeText,
                         width: activeWidth,
                         tint: .blue,
                         helpText: "屏幕活跃时间 \(activeText)"
@@ -841,9 +862,9 @@ struct ScreenTimeProportionStrip: View {
                     
                     // 右方框：亮屏闲置时间（灰色）
                     if showIdleBox {
-                        proportionBox(
+                        ProportionSegmentBox(
                             title: "闲置",
-                            durationText: idleText,
+                            valueText: idleText,
                             width: idleWidth,
                             tint: .secondary,
                             helpText: "亮屏未活跃时间 \(idleText)"
@@ -863,18 +884,69 @@ struct ScreenTimeProportionStrip: View {
             }
         }
     }
+}
+
+// MARK: - 事件执行 vs 忽略双色比例条（仅在有忽略记录时展示）
+private struct EventExecutionProportionStrip: View {
+    let doneCount: Int
+    let ignoredCount: Int
     
-    @ViewBuilder
-    private func proportionBox(
-        title: String,
-        durationText: String,
-        width: CGFloat,
-        tint: Color,
-        helpText: String
-    ) -> some View {
-        // 根据时长文本长度预留足够空间，确保数字绝不被截断
-        let estimatedDurationWidth = CGFloat(durationText.count) * 7.2 + 20
-        let showTitle = width >= (estimatedDurationWidth + 36)
+    var body: some View {
+        let total = max(1, doneCount + ignoredCount)
+        let donePct = Int(round(Double(doneCount) / Double(total) * 100))
+        let ignoredPct = 100 - donePct
+        
+        GeometryReader { geo in
+            let gap: CGFloat = (doneCount > 0 && ignoredCount > 0) ? 4 : 0
+            let usableWidth = max(0, geo.size.width - gap)
+            let minBoxWidth: CGFloat = min(68, usableWidth * 0.38)
+            
+            let doneWidth: CGFloat = {
+                if doneCount == 0 { return 0 }
+                if ignoredCount == 0 { return usableWidth }
+                let proposed = usableWidth * CGFloat(doneCount) / CGFloat(total)
+                return min(usableWidth - minBoxWidth, max(minBoxWidth, proposed))
+            }()
+            let ignoredWidth = max(0, usableWidth - doneWidth)
+            
+            HStack(spacing: gap) {
+                if doneCount > 0 {
+                    ProportionSegmentBox(
+                        title: "执行",
+                        valueText: "\(doneCount)次",
+                        width: doneWidth,
+                        tint: .blue,
+                        helpText: "已执行 \(doneCount) 次（\(donePct)%）"
+                    )
+                }
+                if ignoredCount > 0 {
+                    ProportionSegmentBox(
+                        title: "忽略",
+                        valueText: "\(ignoredCount)次",
+                        width: ignoredWidth,
+                        tint: .secondary,
+                        helpText: "已忽略 \(ignoredCount) 次（\(ignoredPct)%）"
+                    )
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
+        }
+        .frame(height: 26)
+    }
+}
+
+// MARK: - 共享比例条分段胶囊
+private struct ProportionSegmentBox: View {
+    let title: String
+    let valueText: String
+    let width: CGFloat
+    let tint: Color
+    let helpText: String
+    
+    var body: some View {
+        // 根据数值文本长度预留足够空间，确保数字绝不被截断
+        let estimatedValueWidth = CGFloat(valueText.count) * 7.2 + 20
+        let showTitle = width >= (estimatedValueWidth + 36)
         HStack(spacing: 4) {
             if showTitle {
                 Text(title)
@@ -882,7 +954,7 @@ struct ScreenTimeProportionStrip: View {
                     .lineLimit(1)
                 Spacer(minLength: 2)
             }
-            Text(durationText)
+            Text(valueText)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)

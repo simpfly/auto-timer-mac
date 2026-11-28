@@ -439,6 +439,16 @@ public final class StatusItemManager: NSObject, NSMenuDelegate, ObservableObject
 
 // MARK: - NSPopoverDelegate
 extension StatusItemManager: NSPopoverDelegate {
+    public func popoverWillClose(_ notification: Notification) {
+        // 关闭前清空 firstResponder，避免 SwiftUI KeyViewProxy 持有已释放视图的 unowned 引用导致崩溃
+        if let closedPopover = notification.object as? NSPopover {
+            closedPopover.contentViewController?.view.window?.makeFirstResponder(nil)
+        } else {
+            popover?.contentViewController?.view.window?.makeFirstResponder(nil)
+            quickReminderPopover?.contentViewController?.view.window?.makeFirstResponder(nil)
+        }
+    }
+
     public func popoverDidClose(_ notification: Notification) {
         // 弹窗关闭后，立即刷新状态栏文字与图标，恢复实时更新
         updateStatusItemAppearance()

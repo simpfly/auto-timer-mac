@@ -67,19 +67,25 @@ public struct EventTriggerRecord: Identifiable, Codable, Equatable {
     public var taskName: String
     public var triggerTypeTitle: String
     public var count: Int
+    public var ignoredCount: Int?
     public var lastTriggeredAt: Date
+    
+    public var effectiveIgnoredCount: Int { ignoredCount ?? 0 }
+    public var effectiveDoneCount: Int { max(0, count - effectiveIgnoredCount) }
     
     public init(
         id: UUID,
         taskName: String,
         triggerTypeTitle: String,
         count: Int = 1,
+        ignoredCount: Int? = nil,
         lastTriggeredAt: Date = Date()
     ) {
         self.id = id
         self.taskName = taskName
         self.triggerTypeTitle = triggerTypeTitle
         self.count = count
+        self.ignoredCount = ignoredCount
         self.lastTriggeredAt = lastTriggeredAt
     }
 }
@@ -93,6 +99,9 @@ public struct PastEventLogItem: Identifiable, Codable, Equatable {
     public var timestamp: Date
     public var kindString: String // countdown, daily, interval, once, calendar
     public var actionDesc: String
+    public var isIgnored: Bool?
+    
+    public var effectiveIsIgnored: Bool { isIgnored ?? false }
     
     public init(
         id: UUID = UUID(),
@@ -101,7 +110,8 @@ public struct PastEventLogItem: Identifiable, Codable, Equatable {
         triggerTypeTitle: String,
         timestamp: Date = Date(),
         kindString: String = "once",
-        actionDesc: String = ""
+        actionDesc: String = "",
+        isIgnored: Bool? = nil
     ) {
         self.id = id
         self.taskId = taskId
@@ -110,6 +120,7 @@ public struct PastEventLogItem: Identifiable, Codable, Equatable {
         self.timestamp = timestamp
         self.kindString = kindString
         self.actionDesc = actionDesc
+        self.isIgnored = isIgnored
     }
 }
 

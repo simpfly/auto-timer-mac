@@ -12,9 +12,11 @@ public final class TextAlertHUD: ObservableObject {
         let message: String
         let color: Color
         let onConfirm: () -> Void
+        let onIgnore: () -> Void
     }
     private var queuedAlerts: [QueuedAlert] = []
     private var currentConfirmation: (() -> Void)?
+    private var currentIgnoreAction: (() -> Void)?
     private var isDismissing = false
     private var alertWindow: NSPanel?
     @Published public var currentTitle: String = ""
@@ -23,13 +25,20 @@ public final class TextAlertHUD: ObservableObject {
     
     public init() {}
     
-    /// 展示纯文本提醒弹窗卡片（在状态栏图标正下方微弹弹出，必须等待用户确认才关闭）
-    public func show(title: String, message: String, color: Color = .accentColor, onConfirm: @escaping () -> Void = {}) {
-        if currentConfirmation != nil || isDismissing {
-            queuedAlerts.append(QueuedAlert(title: title, message: message, color: color, onConfirm: onConfirm))
+    /// 展示纯文本提醒弹窗卡片（在状态栏图标正下方微弹弹出，必须等待用户确认或忽略才关闭）
+    public func show(
+        title: String,
+        message: String,
+        color: Color = .accentColor,
+        onConfirm: @escaping () -> Void = {},
+        onIgnore: @escaping () -> Void = {}
+    ) {
+        if currentConfirmation != nil || currentIgnoreAction != nil || isDismissing {
+            queuedAlerts.append(QueuedAlert(title: title, message: message, color: color, onConfirm: onConfirm, onIgnore: onIgnore))
             return
         }
         currentConfirmation = onConfirm
+        currentIgnoreAction = onIgnore
         self.currentTitle = title.isEmpty ? "定时提醒" : title
         self.currentMessage = message.isEmpty ? "时间已到" : message
         self.currentColor = color
@@ -39,11 +48,6 @@ public final class TextAlertHUD: ObservableObject {
         }
         
         guard let window = alertWindow else { return }
-        
-        // 确保 hostingController 立即同步最新状态以获取精准尺寸，杜绝布局滞后造成的二次跳动
-        if let hosting = window.contentViewController as? NSHostingController<TextAlertBubbleView> {
-            hosting.rootView = TextAlertBubbleView()
-        }
         
         let targetFrame = calculateTargetFrame(window: window)
         
@@ -117,13 +121,20 @@ public final class TextAlertHUD: ObservableObject {
         return NSRect(x: targetX, y: finalY, width: cardWidth, height: cardHeight)
     }
     
-    /// 用户点击确认或关闭（轻微上收淡出）
-    public func dismiss() {
+    /// 用户点击「好的」或「忽略」（轻微上收淡出）
+    public func dismiss(ignored: Bool = false) {
         guard let window = alertWindow, window.isVisible, !isDismissing else { return }
         isDismissing = true
+        window.makeFirstResponder(nil)
         let confirmation = currentConfirmation
+        let ignoreAction = currentIgnoreAction
         currentConfirmation = nil
-        confirmation?()
+        currentIgnoreAction = nil
+        if ignored {
+            ignoreAction?()
+        } else {
+            confirmation?()
+        }
         
         let exitFrame = NSRect(
             x: window.frame.origin.x,
@@ -144,7 +155,13 @@ public final class TextAlertHUD: ObservableObject {
                 self.isDismissing = false
                 if !self.queuedAlerts.isEmpty {
                     let next = self.queuedAlerts.removeFirst()
-                    self.show(title: next.title, message: next.message, color: next.color, onConfirm: next.onConfirm)
+                    self.show(
+                        title: next.title,
+                        message: next.message,
+                        color: next.color,
+                        onConfirm: next.onConfirm,
+                        onIgnore: next.onIgnore
+                    )
                 }
             }
         })
@@ -213,13 +230,30 @@ struct TextAlertBubbleView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 2)
             
-            // 底部操作区：醒目的【我知道了】按钮居中放置
-            HStack {
-                Spacer()
+            // 底部操作区：左侧【忽略】，右侧【好的】
+            HStack(spacing: 10) {
                 Button(action: {
-                    hud.dismiss()
+                    hud.dismiss(ignored: true)
                 }) {
-                    Text("我知道了")
+                    Text("忽略")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 6)
+                        .background(Color.primary.opacity(0.07))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.primary.opacity(0.12), lineWidth: 0.6)
+                        )
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                
+                Button(action: {
+                    hud.dismiss(ignored: false)
+                }) {
+                    Text("好的")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 22)
@@ -229,8 +263,8 @@ struct TextAlertBubbleView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
-                Spacer()
             }
+            .frame(maxWidth: .infinity)
         }
         .padding(16)
         .frame(width: TextAlertHUD.cardWidth)

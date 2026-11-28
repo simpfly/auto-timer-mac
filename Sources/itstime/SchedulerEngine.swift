@@ -697,12 +697,16 @@ public final class SchedulerEngine: ObservableObject {
         if let idx = tasks.firstIndex(where: { $0.id == alert.task.id }) {
             let now = Date()
             tasks[idx].lastTriggeredAt = now
+            tasks[idx].triggerCount = tasks[idx].effectiveTriggerCount + 1
             if case .countdown(let total) = tasks[idx].trigger {
                 tasks[idx].countdownRemainingSeconds = total
             } else if case .once = tasks[idx].trigger {
                 tasks[idx].isEnabled = false
             }
             saveTasks()
+        }
+        if let logId = ScreenTimeTrackerService.shared.recordEventTrigger(for: alert.task) {
+            ScreenTimeTrackerService.shared.markEventLogIgnored(logId: logId)
         }
         AudioPreAlertHUD.shared.dismiss()
         self.pendingAudioAlert = nil
@@ -723,12 +727,13 @@ public final class SchedulerEngine: ObservableObject {
         }
         
         // 1. 仅正式调度触发时计入统计与历史时间轴
+        var recordedLogId: UUID? = nil
         if !isManualTest {
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[idx].triggerCount = tasks[idx].effectiveTriggerCount + 1
                 saveTasks()
             }
-            ScreenTimeTrackerService.shared.recordEventTrigger(for: task)
+            recordedLogId = ScreenTimeTrackerService.shared.recordEventTrigger(for: task)
         }
         
         // 2. 执行具体动作
@@ -755,13 +760,26 @@ public final class SchedulerEngine: ObservableObject {
                 case .interval:
                     taskColor = .teal
                 }
-                // 纯文本提醒：在菜单栏图标下方弹出专属提醒卡片，等待用户确认
+                // 纯文本提醒：在菜单栏图标下方弹出专属提醒卡片，等待用户选择「好的」或「忽略」
                 let waitsForConfirmation = !isManualTest && beginWaitingForTextConfirmation(taskID: task.id)
-                TextAlertHUD.shared.show(title: task.name, message: alertMsg, color: taskColor) { [weak self] in
-                    if waitsForConfirmation {
-                        self?.confirmTextCountdown(taskID: task.id)
+                TextAlertHUD.shared.show(
+                    title: task.name,
+                    message: alertMsg,
+                    color: taskColor,
+                    onConfirm: { [weak self] in
+                        if waitsForConfirmation {
+                            self?.confirmTextCountdown(taskID: task.id)
+                        }
+                    },
+                    onIgnore: { [weak self] in
+                        if waitsForConfirmation {
+                            self?.confirmTextCountdown(taskID: task.id)
+                        }
+                        if let logId = recordedLogId {
+                            ScreenTimeTrackerService.shared.markEventLogIgnored(logId: logId)
+                        }
                     }
-                }
+                )
             } else {
                 PopupHUDManager.shared.show(for: task, mode: mode)
             }

@@ -79,6 +79,7 @@ public final class AudioPreAlertHUD: ObservableObject {
     public func dismiss() {
         self.currentAlert = nil
         guard let window = alertWindow, window.isVisible else { return }
+        window.makeFirstResponder(nil)
         
         let exitFrame = NSRect(
             x: window.frame.origin.x,

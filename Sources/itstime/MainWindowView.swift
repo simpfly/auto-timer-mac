@@ -56,7 +56,6 @@ struct MainWindowView: View {
                     currentPage = .tasks
                 })
                 .padding(.top, 8)
-                .transition(.opacity)
             } else {
                 VStack(spacing: 0) {
                     // 顶栏：极简通透（位于红绿灯下方，与主内容区左对齐）
@@ -120,6 +119,10 @@ struct MainWindowView: View {
             }
         }
         .frame(minWidth: 540, minHeight: 500)
+        .animation(nil, value: currentPage)
+        .onChange(of: currentPage) { _ in
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        }
         .sheet(isPresented: $showingCalendarSync) {
             CalendarSyncSheet()
         }

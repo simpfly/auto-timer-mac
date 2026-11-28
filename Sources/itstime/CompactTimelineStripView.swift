@@ -8,6 +8,23 @@ public struct TimelineEventItem: Identifiable {
     public let date: Date
     public let kind: TimelineKind
     public let actionDesc: String
+    public let isIgnored: Bool
+    
+    public init(
+        id: String,
+        name: String,
+        date: Date,
+        kind: TimelineKind,
+        actionDesc: String,
+        isIgnored: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.date = date
+        self.kind = kind
+        self.actionDesc = actionDesc
+        self.isIgnored = isIgnored
+    }
     
     public enum TimelineKind {
         case countdown
@@ -167,9 +184,9 @@ public struct CompactTimelineStripView: View {
         var list: [TimelineEventItem] = []
         var recordedIds = Set<String>()
         
-        // 1. 从 ScreenTimeTrackerService 当前统计周期的历史流水中提取
+        // 1. 从 ScreenTimeTrackerService 当前统计周期的历史流水中提取（严格限定为 <= now 且属于当前统计日）
         let logs = tracker.currentStats.pastEventLogs
-        for log in logs where log.timestamp <= now {
+        for log in logs where log.timestamp <= now && calendar.isDate(log.timestamp, inSameDayAs: tracker.anchorDate) {
             let kind: TimelineEventItem.TimelineKind
             switch log.kindString {
             case "countdown": kind = .countdown
@@ -184,7 +201,8 @@ public struct CompactTimelineStripView: View {
                 name: log.taskName,
                 date: log.timestamp,
                 kind: kind,
-                actionDesc: log.actionDesc
+                actionDesc: log.actionDesc,
+                isIgnored: log.effectiveIsIgnored
             )
             list.append(item)
             if let tId = log.taskId {
@@ -193,7 +211,7 @@ public struct CompactTimelineStripView: View {
         }
         
         // 2. 兜底补全：从当前统计周期的 sortedEventTriggers 提取（兼容旧版本尚无流水日志的历史数据）
-        for ev in tracker.currentStats.sortedEventTriggers where ev.lastTriggeredAt <= now {
+        for ev in tracker.currentStats.sortedEventTriggers where ev.lastTriggeredAt <= now && calendar.isDate(ev.lastTriggeredAt, inSameDayAs: tracker.anchorDate) {
             let taskIdStr = "task_\(ev.id)"
             if !recordedIds.contains(taskIdStr) {
                 let kind = TimelineEventItem.TimelineKind.resolve(
@@ -462,13 +480,16 @@ public struct CompactTimelineStripView: View {
                     ForEach(Array(events.enumerated()), id: \.element.id) { index, item in
                         let x = xs[index]
                         
-                        // 节点药丸：垂直中心精确落在导轨线 trackY 上（与当前时间小蓝点完全在同一水平线上）
+                        // 节点药丸：垂直中心精确落在导轨线 trackY 上；已忽略的事件采用低饱和空心描边以作区分
                         RoundedRectangle(cornerRadius: 1.5)
-                            .fill(item.kind.color)
+                            .fill(item.isIgnored ? Color.secondary.opacity(0.18) : item.kind.color)
                             .frame(width: 4.5, height: 8.5)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 1.5)
-                                    .stroke(Color.white.opacity(0.5), lineWidth: 0.5)
+                                    .stroke(
+                                        item.isIgnored ? Color.secondary.opacity(0.65) : Color.white.opacity(0.5),
+                                        lineWidth: item.isIgnored ? 1.0 : 0.5
+                                    )
                             )
                             .position(x: x, y: trackY)
                         
@@ -476,7 +497,7 @@ public struct CompactTimelineStripView: View {
                         if labelIndices.contains(index) {
                             Text(formattedTime(for: item.date))
                                 .font(.system(size: 9, weight: .medium, design: .rounded))
-                                .foregroundColor(item.kind.color.opacity(0.85))
+                                .foregroundColor(item.isIgnored ? Color.secondary.opacity(0.55) : item.kind.color.opacity(0.85))
                                 .lineLimit(1)
                                 .fixedSize()
                                 .position(x: x, y: textY)
@@ -516,7 +537,14 @@ public struct CompactTimelineStripView: View {
             currentDate = Date()
         }
         .onReceive(timer) { input in
-            currentDate = input
+            if mode == .upcoming {
+                currentDate = input
+            } else if Calendar.current.isDateInToday(tracker.anchorDate) {
+                // 统计页过去时间带仅在跨分钟时更新参考时间，避免每秒重算坐标造成节点闪烁
+                if abs(input.timeIntervalSince(currentDate)) >= 60 {
+                    currentDate = input
+                }
+            }
         }
     }
 }
@@ -538,11 +566,21 @@ struct EventTooltipBubbleView: View {
                     Text(item.kind.title)
                         .font(.system(size: 9, weight: .bold))
                 }
-                .foregroundColor(item.kind.color)
+                .foregroundColor(item.isIgnored ? .secondary : item.kind.color)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
-                .background(item.kind.color.opacity(0.12))
+                .background((item.isIgnored ? Color.secondary : item.kind.color).opacity(0.12))
                 .clipShape(Capsule())
+                
+                if item.isIgnored {
+                    Text("已忽略")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12))
+                        .clipShape(Capsule())
+                }
                 
                 Spacer()
                 
@@ -558,7 +596,7 @@ struct EventTooltipBubbleView: View {
             // 任务或日程名称
             Text(item.name)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.primary)
+                .foregroundColor(item.isIgnored ? .secondary : .primary)
                 .lineLimit(1)
             
             // 底栏：触发时间与动作

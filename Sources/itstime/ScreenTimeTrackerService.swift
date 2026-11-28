@@ -523,9 +523,10 @@ public final class ScreenTimeTrackerService: ObservableObject {
     }
     
     // MARK: - 事件触发次数统计
-    public func recordEventTrigger(for task: ScheduleTask) {
+    @discardableResult
+    public func recordEventTrigger(for task: ScheduleTask) -> UUID? {
         // 息屏、锁屏或系统休眠时绝不计入统计
-        guard !isScreenOrSessionLocked else { return }
+        guard !isScreenOrSessionLocked else { return nil }
         
         let now = Date()
         var event = todayRecord.eventTriggers[task.id] ?? EventTriggerRecord(
@@ -566,6 +567,44 @@ public final class ScreenTimeTrackerService: ObservableObject {
         todayTotalEventTriggerCount = todayRecord.totalEventTriggerCount
         refreshStats()
         saveTodayRecord(force: true)
+        return logItem.id
+    }
+    
+    /// 将指定触发流水标记为「已忽略」（表示用户未执行），并同步累加对应任务的忽略次数
+    public func markEventLogIgnored(logId: UUID) {
+        if let idx = todayRecord.pastEventLogs?.firstIndex(where: { $0.id == logId }) {
+            guard !(todayRecord.pastEventLogs?[idx].effectiveIsIgnored ?? false) else { return }
+            todayRecord.pastEventLogs?[idx].isIgnored = true
+            if let taskId = todayRecord.pastEventLogs?[idx].taskId,
+               var ev = todayRecord.eventTriggers[taskId] {
+                ev.ignoredCount = ev.effectiveIgnoredCount + 1
+                todayRecord.eventTriggers[taskId] = ev
+            }
+            todaySortedEventTriggers = todayRecord.sortedEventTriggers
+            refreshStats()
+            saveTodayRecord(force: true)
+            return
+        }
+        
+        // 跨日兜底：若弹窗跨过零点才被点击忽略，尝试在昨日记录中定位并更新
+        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) {
+            let yesterdayStr = Self.dateFormatter.string(from: yesterday)
+            if var record = loadRecord(for: yesterdayStr),
+               let idx = record.pastEventLogs?.firstIndex(where: { $0.id == logId }) {
+                guard !(record.pastEventLogs?[idx].effectiveIsIgnored ?? false) else { return }
+                record.pastEventLogs?[idx].isIgnored = true
+                if let taskId = record.pastEventLogs?[idx].taskId,
+                   var ev = record.eventTriggers[taskId] {
+                    ev.ignoredCount = ev.effectiveIgnoredCount + 1
+                    record.eventTriggers[taskId] = ev
+                }
+                let fileURL = recordFileURL(for: yesterdayStr)
+                if let data = try? JSONEncoder().encode(record) {
+                    try? data.write(to: fileURL, options: .atomic)
+                }
+                refreshStats()
+            }
+        }
     }
     
     // MARK: - 日期导航与周期判断
@@ -974,6 +1013,8 @@ public final class ScreenTimeTrackerService: ObservableObject {
             for (id, ev) in r.eventTriggers {
                 if var exist = mergedEvents[id] {
                     exist.count += ev.count
+                    let mergedIgnored = exist.effectiveIgnoredCount + ev.effectiveIgnoredCount
+                    exist.ignoredCount = mergedIgnored > 0 ? mergedIgnored : nil
                     if ev.lastTriggeredAt > exist.lastTriggeredAt {
                         exist.lastTriggeredAt = ev.lastTriggeredAt
                     }

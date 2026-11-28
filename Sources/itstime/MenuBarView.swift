@@ -55,7 +55,6 @@ struct MenuBarView: View {
                 ScreenTimeView(onDismiss: {
                     currentPage = .tasks
                 })
-                .transition(.opacity)
             } else {
                 VStack(spacing: 0) {
                     // 1. 顶栏：极简通透
@@ -126,6 +125,10 @@ struct MenuBarView: View {
             }
         }
         .frame(width: 380, height: 540)
+        .animation(nil, value: currentPage)
+        .onChange(of: currentPage) { _ in
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        }
         .sheet(isPresented: $showingEditor) {
             TaskEditorSheet(editingTask: editingTask, onSave: { updated in
                 if editingTask != nil {

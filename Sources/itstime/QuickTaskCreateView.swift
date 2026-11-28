@@ -323,6 +323,16 @@ struct QuickTaskCreateView: View {
         .onChange(of: intervalTimeString) { newValue in
             syncIntervalFromInput(newValue)
         }
+        .onChange(of: isActionPickerExpanded) { expanded in
+            if expanded {
+                isTitleFocused = false
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
+        }
+        .onDisappear {
+            isTitleFocused = false
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        }
     }
     
     // MARK: - 提醒方式下拉选择器（像素级对齐，箭头展开/收起联动，绝对零挤压，选项必响应）
@@ -1484,6 +1494,12 @@ private struct UnifiedTimeStepperView: View {
                 .onChange(of: isFocused) { focused in
                     if !focused {
                         onSubmit()
+                    }
+                }
+                .onDisappear {
+                    isFocused = false
+                    if NSApp.keyWindow?.firstResponder is NSTextView {
+                        NSApp.keyWindow?.makeFirstResponder(nil)
                     }
                 }
             

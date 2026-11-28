@@ -79,7 +79,7 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     public func closeCalendarSyncWindow() {
-        calendarSyncWindow?.orderOut(nil)
+        hideWindow(calendarSyncWindow)
     }
     
     public func openUpdateWindow() {
@@ -110,7 +110,7 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     public func closeUpdateWindow() {
-        updateWindow?.orderOut(nil)
+        hideWindow(updateWindow)
     }
     
     public func openPreferencesWindow() {
@@ -167,9 +167,15 @@ public final class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         NotificationCenter.default.post(name: NSNotification.Name("ItsTime_ShowScreenTimePage"), object: nil)
     }
     
+    private func hideWindow(_ window: NSWindow?) {
+        guard let window else { return }
+        window.makeFirstResponder(nil)
+        window.orderOut(nil)
+    }
+
     // NSWindowDelegate: 拦截窗口关闭，仅隐藏窗口，保留菜单栏继续后台执行
     public func windowShouldClose(_ sender: NSWindow) -> Bool {
-        sender.orderOut(nil)
+        hideWindow(sender)
         return false
     }
 }
